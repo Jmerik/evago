@@ -5,16 +5,51 @@ import { Badge } from '../components/Badge';
 import { Plane, Bus, Clock, ShieldCheck, Ticket, MapPin, Calendar, ArrowRight, Train, CheckCircle2, Sparkles, Loader2 } from 'lucide-react';
 import { evagoApi } from '../services/api';
 
+function buildDateTimeIso(dateStr, timeStr) {
+  if (!dateStr) return null;
+  const safeTime = timeStr || '00:00';
+  return `${dateStr}T${safeTime}:00`;
+}
+
 export const TravelOptimization = ({ onNext, itinerary = [] }) => {
   const [activePreset, setActivePreset] = useState('time'); // 'time', 'comfort', 'price'
   const [departure, setDeparture] = useState('London Heathrow (LHR)');
   const [returnPlace, setReturnPlace] = useState('London Heathrow (LHR)');
   const [startDate, setStartDate] = useState('');
+  const [startTime, setStartTime] = useState('09:00'); // 'HH:MM'
   const [endDate, setEndDate] = useState('');
+  const [searchError, setSearchError] = useState('');
+  // Per-stop date/time overrides keyed by city (used only for stops that have no event datetime)
+  const [stopOverrides, setStopOverrides] = useState({});
 
-  // Extract destination stops from itinerary
-  const rawStops = itinerary.map(i => i.venue?.city || i.name.replace(/^Trip to /, '')).filter(Boolean);
-  const stops = Array.from(new Set(rawStops.length > 0 ? rawStops : ['Singapore']));
+  // Build ordered list of stops with their arrival deadlines from itinerary events.
+  const stopsWithDates = (() => {
+    const map = new Map(); // city -> earliest startAt (ISO)
+    const order = [];
+    itinerary.forEach((item) => {
+      const city = item.venue?.city || item.name?.replace(/^Trip to /, '');
+      if (!city) return;
+      if (!map.has(city)) {
+        order.push(city);
+        map.set(city, null);
+      }
+      const candidate = item.startAt || (item.scheduledDate && item.scheduledTime ? `${item.scheduledDate}T${item.scheduledTime}:00Z` : null);
+      if (candidate) {
+        const current = map.get(city);
+        if (!current || new Date(candidate) < new Date(current)) {
+          map.set(city, candidate);
+        }
+      }
+    });
+    return order.map((city) => ({
+      city,
+      arriveBy: map.get(city),
+      needsDate: !map.get(city),
+    }));
+  })();
+
+  const stops = stopsWithDates.map((s) => s.city);
+  const needsAnyDate = stopsWithDates.some((s) => s.needsDate) || !startDate || !endDate || false;
   const destinationsList = stops.join(' ➔ ');
 
   // Autocomplete state for departure
@@ -106,34 +141,88 @@ export const TravelOptimization = ({ onNext, itinerary = [] }) => {
 
   // Trigger search on explicit user action or initial search button click
   const handlePerformSearch = async () => {
+    setSearchError('');
+
+    // Validation: every stop and the departure must have a date
+    if (!startDate) {
+      setSearchError('Please select a travel start date (departure date).');
+      return;
+    }
+
+    const missingDates = stopsWithDates.filter((s) => {
+      if (!s.needsDate) return false;
+      const ov = stopOverrides[s.city];
+      return !ov || !ov.date;
+    });
+
+    if (missingDates.length > 0) {
+      setSearchError(
+        `Please select a date and time for: ${missingDates.map((s) => s.city).join(', ')}`
+      );
+      return;
+    }
+
     setHasSearched(true);
     setIsSearchingPipes(true);
     try {
+      // Build segments with per-leg departDate and arriveBy
+      const segments = [];
+      let prevStopDate = startDate;
+      for (let i = 0; i < stopsWithDates.length; i++) {
+        const stop = stopsWithDates[i];
+        const arrivalIso = !stop.needsDate
+          ? stop.arriveBy
+          : buildDateTimeIso(stopOverrides[stop.city].date, stopOverrides[stop.city].time || '09:00');
+
+        const from = i === 0 ? departure : stopsWithDates[i - 1].city;
+        const to = stop.city;
+
+        segments.push({
+          from,
+          to,
+          departDate: prevStopDate,
+          arriveBy: arrivalIso,
+        });
+
+        // Next leg departs on this stop's date
+        prevStopDate = arrivalIso ? arrivalIso.slice(0, 10) : prevStopDate;
+      }
+
+      // Return leg only if endDate selected
+      const lastStop = stopsWithDates.length > 0 ? stopsWithDates[stopsWithDates.length - 1] : null;
+      const returnLeg = endDate && lastStop
+        ? {
+            from: lastStop.city,
+            to: returnPlace,
+            departDate: endDate,
+          }
+        : null;
+
       const res = await evagoApi.searchTravelOptions({
-        departure,
-        returnPlace,
-        destinations: stops,
-        startDate,
-        endDate,
+        segments,
+        returnLeg,
       });
       if (res.success) {
         if (res.inboundOptions?.length > 0) setInboundOptions(res.inboundOptions);
         if (res.interCityOptions) setInterCityOptions(res.interCityOptions);
-        if (res.outboundOptions?.length > 0) setOutboundOptions(res.outboundOptions);
+        if (res.outboundOptions?.length > 0 && res.returnFlightIncluded) setOutboundOptions(res.outboundOptions);
+        else setOutboundOptions([]);
         if (res.transferOptions?.length > 0) setTransferOptions(res.transferOptions);
         if (res.dynamicSegments?.length > 0) {
           setDynamicSegments(res.dynamicSegments);
-          // Initialize selected option 0 for each segment
           const initSel = {};
           res.dynamicSegments.forEach(seg => {
             initSel[seg.segmentIndex] = 0;
           });
           setSelectedSegmentOptions(initSel);
+        } else {
+          setDynamicSegments([]);
         }
         if (res.apiPipesUsed) setApiPipesUsed(res.apiPipesUsed);
       }
     } catch (err) {
       console.error('Travel search API error:', err);
+      setSearchError('Search failed. Please try again.');
     } finally {
       setIsSearchingPipes(false);
     }
@@ -300,11 +389,13 @@ export const TravelOptimization = ({ onNext, itinerary = [] }) => {
       departure,
       returnPlace,
       startDate,
+      startTime,
       endDate,
       destinationsList,
       primaryCity: firstStop,
       flight: inboundOptions[selectedInbound] || {},
       transfer: transferOptions[selectedTransfer] || {},
+      returnFlightIncluded: Boolean(outboundOptions.length > 0 && endDate),
       bookedLegs,
       totalCost
     });
@@ -534,18 +625,46 @@ export const TravelOptimization = ({ onNext, itinerary = [] }) => {
           </div>
         </div>
 
-        {/* Row 2: Travel Start Date + End Date side by side */}
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px', paddingTop: '16px', borderTop: '1px solid #f1f5f9' }}>
+        {/* Row 2: Travel Start Date + End Date + Departure Time */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px', paddingTop: '16px', borderTop: '1px solid #f1f5f9' }}>
           {/* Start Date */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
             <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
               📅 Travel Start Date *
             </label>
-            <input 
-              type="date" 
-              value={startDate} 
-              onChange={(e) => setStartDate(e.target.value)} 
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
               onClick={(e) => { try { e.target.showPicker(); } catch {} }}
+              style={{
+                width: '100%',
+                padding: '12px 14px',
+                border: '1.5px solid #cbd5e1',
+                borderRadius: '8px',
+                outline: 'none',
+                fontSize: '0.95rem',
+                fontWeight: 600,
+                color: '#0f172a',
+                background: startDate ? '#ffffff' : '#fef2f2',
+                boxSizing: 'border-box',
+                cursor: 'pointer'
+              }}
+            />
+            {!startDate && (
+              <span style={{ fontSize: '0.7rem', color: '#dc2626', fontWeight: 600 }}>Required</span>
+            )}
+          </div>
+
+          {/* Departure Time */}
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              🕒 Departure Time
+            </label>
+            <input
+              type="time"
+              value={startTime}
+              onChange={(e) => setStartTime(e.target.value)}
               style={{
                 width: '100%',
                 padding: '12px 14px',
@@ -565,12 +684,12 @@ export const TravelOptimization = ({ onNext, itinerary = [] }) => {
           {/* End Date */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
             <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
-              📅 Travel End Date (Optional)
+              📅 Return Date (Optional)
             </label>
-            <input 
-              type="date" 
-              value={endDate} 
-              onChange={(e) => setEndDate(e.target.value)} 
+            <input
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
               onClick={(e) => { try { e.target.showPicker(); } catch {} }}
               style={{
                 width: '100%',
@@ -586,25 +705,109 @@ export const TravelOptimization = ({ onNext, itinerary = [] }) => {
                 cursor: 'pointer'
               }}
             />
+            {!endDate && (
+              <span style={{ fontSize: '0.7rem', color: '#64748b', fontStyle: 'italic' }}>Leave empty for one-way</span>
+            )}
           </div>
         </div>
+
+        {/* Row 3: Per-Stop Date/Time pickers (only for stops without an event datetime) */}
+        {stopsWithDates.some((s) => s.needsDate) && (
+          <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid #f1f5f9' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+              <Calendar size={14} style={{ color: '#0284c7' }} />
+              <h4 style={{ margin: 0, fontSize: '0.85rem', color: '#0f172a' }}>
+                Per-Stop Dates &amp; Times
+              </h4>
+              <span style={{ fontSize: '0.72rem', color: '#dc2626', fontWeight: 600 }}>
+                Required — please fill missing dates
+              </span>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '14px' }}>
+              {stopsWithDates.filter((s) => s.needsDate).map((s) => {
+                const ov = stopOverrides[s.city] || { date: '', time: '09:00' };
+                const filled = Boolean(ov.date);
+                return (
+                  <div
+                    key={s.city}
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '6px',
+                      padding: '12px',
+                      border: `1.5px solid ${filled ? '#cbd5e1' : '#fca5a5'}`,
+                      borderRadius: '8px',
+                      background: filled ? '#ffffff' : '#fef2f2',
+                    }}
+                  >
+                    <label style={{ fontSize: '0.7rem', fontWeight: 700, color: '#0f172a', textTransform: 'uppercase' }}>
+                      📍 Arrival at {s.city} — Date *
+                    </label>
+                    <div style={{ display: 'flex', gap: '8px' }}>
+                      <input
+                        type="date"
+                        value={ov.date}
+                        onChange={(e) => setStopOverrides((prev) => ({ ...prev, [s.city]: { ...ov, date: e.target.value } }))}
+                        style={{
+                          flex: 2,
+                          padding: '10px 12px',
+                          border: '1px solid #cbd5e1',
+                          borderRadius: '6px',
+                          fontSize: '0.85rem',
+                          fontWeight: 600,
+                          boxSizing: 'border-box',
+                          cursor: 'pointer',
+                        }}
+                      />
+                      <input
+                        type="time"
+                        value={ov.time}
+                        onChange={(e) => setStopOverrides((prev) => ({ ...prev, [s.city]: { ...ov, time: e.target.value } }))}
+                        style={{
+                          flex: 1,
+                          padding: '10px 12px',
+                          border: '1px solid #cbd5e1',
+                          borderRadius: '6px',
+                          fontSize: '0.85rem',
+                          fontWeight: 600,
+                          boxSizing: 'border-box',
+                          cursor: 'pointer',
+                        }}
+                      />
+                    </div>
+                    {!filled && (
+                      <span style={{ fontSize: '0.7rem', color: '#dc2626', fontWeight: 600 }}>Required</span>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Validation error banner */}
+        {searchError && (
+          <div style={{ marginTop: '16px', padding: '12px 16px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', color: '#b91c1c', fontSize: '0.85rem', fontWeight: 600 }}>
+            ⚠️ {searchError}
+          </div>
+        )}
 
         {/* Search CTA Button */}
         <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid #f1f5f9', display: 'flex', justify: 'flex-end' }}>
           <button
             type="button"
             onClick={handlePerformSearch}
-            disabled={isSearchingPipes}
+            disabled={isSearchingPipes || !startDate || stopsWithDates.some((s) => s.needsDate && (!stopOverrides[s.city] || !stopOverrides[s.city].date))}
             style={{
               width: '100%',
               padding: '13px 24px',
               borderRadius: '8px',
               border: 'none',
-              background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+              background: (isSearchingPipes || !startDate) ? '#cbd5e1' : 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
               color: '#ffffff',
               fontWeight: 700,
               fontSize: '0.95rem',
-              cursor: isSearchingPipes ? 'not-allowed' : 'pointer',
+              cursor: (isSearchingPipes || !startDate) ? 'not-allowed' : 'pointer',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -617,6 +820,11 @@ export const TravelOptimization = ({ onNext, itinerary = [] }) => {
               <>
                 <Loader2 size={18} className="animate-spin" />
                 <span>Searching Duffel, Kiwi, 12Go &amp; Grab APIs...</span>
+              </>
+            ) : !startDate ? (
+              <>
+                <Calendar size={18} />
+                <span>Select Start Date to Search</span>
               </>
             ) : (
               <>

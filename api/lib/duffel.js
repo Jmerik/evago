@@ -62,7 +62,7 @@ function ensureIsoDate(dateStr) {
   return new Date(Date.now() + 86400000 * 21).toISOString().split('T')[0];
 }
 
-async function fetchDuffelOffers(origin, destination, depDate) {
+async function fetchDuffelOffers(origin, destination, depDate, arriveBy) {
   if (!DUFFEL_API_KEY) {
     console.warn('DUFFEL_API_KEY not configured; returning empty flight offers.');
     return [];
@@ -81,8 +81,8 @@ async function fetchDuffelOffers(origin, destination, depDate) {
       headers: { 'Authorization': `Bearer ${DUFFEL_API_KEY}` },
     });
 
-    const rawOffers = (duffelRes.data?.data?.offers || []).slice(0, 5);
-    return rawOffers.map((offer, idx) => {
+    const rawOffers = (duffelRes.data?.data?.offers || []).slice(0, 20);
+    const mapped = rawOffers.map((offer, idx) => {
       const slice = offer.slices?.[0] || {};
       const segments = slice.segments || [];
       const firstSeg = segments[0] || {};
@@ -123,6 +123,20 @@ async function fetchDuffelOffers(origin, destination, depDate) {
         bookingUrl: 'https://duffel.com/',
       };
     });
+
+    if (arriveBy) {
+      const deadline = new Date(arriveBy).getTime();
+      if (!isNaN(deadline)) {
+        const filtered = mapped.filter((o) => {
+          if (!o.rawArrivalDate) return false;
+          return new Date(o.rawArrivalDate).getTime() <= deadline;
+        });
+        // Always renumber IDs after filtering
+        return filtered.slice(0, 5).map((offer, idx) => ({ ...offer, id: idx }));
+      }
+    }
+
+    return mapped.slice(0, 5);
   } catch (err) {
     console.warn(`Duffel API error (${origin}->${destination}):`, err.response?.data || err.message);
     return [];
