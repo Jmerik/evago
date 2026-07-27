@@ -317,26 +317,47 @@ app.post('/api/travel/search', async (req, res) => {
   const DEFAULT_DUFFEL_KEY = ['duffel', 'test', 'HeM4wZmf1K4eFSYMngcq5PZz5FMopD_JwUM7BrNAJJ0'].join('_');
   const duffelToken = process.env.DUFFEL_API_KEY || req.body?.duffelToken || DEFAULT_DUFFEL_KEY;
 
-  const parseDuffelDuration = (isoDuration) => {
-    if (!isoDuration) return 'Direct';
+  const parseISOToMinutes = (isoDuration) => {
+    if (!isoDuration) return 9999;
     const hoursMatch = isoDuration.match(/(\d+)H/i);
     const minsMatch = isoDuration.match(/(\d+)M/i);
-    const hours = hoursMatch ? hoursMatch[1] : '0';
-    const mins = minsMatch ? minsMatch[1] : '0';
-    return `${hours}h ${mins}m`;
+    const h = hoursMatch ? parseInt(hoursMatch[1], 10) : 0;
+    const m = minsMatch ? parseInt(minsMatch[1], 10) : 0;
+    return h * 60 + m;
+  };
+
+  const formatFlightTime = (isoString) => {
+    if (!isoString) return '';
+    try {
+      const d = new Date(isoString);
+      return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', hour12: true });
+    } catch {
+      return (isoString.split('T')[1] || '').substring(0, 5);
+    }
+  };
+
+  const formatFlightDate = (isoString) => {
+    if (!isoString) return '';
+    try {
+      const d = new Date(isoString);
+      return d.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+    } catch {
+      return isoString.split('T')[0];
+    }
   };
 
   const fetchDuffelOffers = async (origin, destination, depDate) => {
     if (!duffelToken) return [];
     try {
       const defaultDate = new Date(Date.now() + 86400000 * 21).toISOString().split('T')[0];
+      const targetDate = depDate || defaultDate;
       const duffelRes = await axios.post('https://api.duffel.com/air/offer_requests', {
         data: {
           slices: [
             {
               origin,
               destination,
-              departure_date: depDate || defaultDate
+              departure_date: targetDate
             }
           ],
           passengers: [{ type: 'adult' }],
@@ -351,25 +372,50 @@ app.post('/api/travel/search', async (req, res) => {
         timeout: 10000
       });
 
-      const offers = (duffelRes.data?.data?.offers || []).slice(0, 5);
-      return offers.map((offer, idx) => {
+      const rawOffers = (duffelRes.data?.data?.offers || []).slice(0, 5);
+      return rawOffers.map((offer, idx) => {
         const slice = offer.slices?.[0] || {};
         const segments = slice.segments || [];
+        const firstSeg = segments[0] || {};
+        const lastSeg = segments[segments.length - 1] || firstSeg;
         const carrier = offer.owner || {};
         const priceVal = Math.round(parseFloat(offer.total_amount) || 0);
-        
+        const durationMins = parseISOToMinutes(slice.duration);
+        const stopCount = segments.length > 1 ? segments.length - 1 : 0;
+
+        const depTime = formatFlightTime(firstSeg.departing_at);
+        const arrTime = formatFlightTime(lastSeg.arriving_at);
+        const depDateStr = formatFlightDate(firstSeg.departing_at || targetDate);
+        const arrDateStr = formatFlightDate(lastSeg.arriving_at || targetDate);
+
+        const carrierCode = carrier.iata_code || firstSeg.operating_carrier?.iata_code || 'FL';
+        const flNumOnly = firstSeg.operating_carrier_flight_number || firstSeg.marketing_carrier_flight_number || (100 + idx * 35);
+        const flightNum = `${carrierCode} ${flNumOnly}`;
+
         return {
           id: idx,
-          provider: `${carrier.name || 'Duffel Carrier'} (Live Duffel API)`,
+          provider: carrier.name || 'Duffel Carrier',
           logoUrl: carrier.logo_symbol_url || carrier.logo_lockup_url || '',
           time: parseDuffelDuration(slice.duration),
+          durationMins,
+          departureTime: depTime,
+          arrivalTime: arrTime,
+          departureDate: depDateStr,
+          arrivalDate: arrDateStr,
+          rawDepartureDate: firstSeg.departing_at || targetDate,
+          rawArrivalDate: lastSeg.arriving_at || targetDate,
+          originIata: firstSeg.origin?.iata_code || origin,
+          originName: firstSeg.origin?.name || origin,
+          destIata: lastSeg.destination?.iata_code || destination,
+          destName: lastSeg.destination?.name || destination,
+          stops: stopCount,
           price: priceVal,
           currency: offer.total_currency || 'USD',
-          type: segments.length > 1 ? `${segments.length - 1} Stop (${segments[0]?.operating_carrier?.name || 'Connect'})` : 'Direct (Non-stop)',
-          tag: idx === 0 ? 'time' : (idx === 1 ? 'comfort' : 'price'),
+          type: stopCount > 0 ? `${stopCount} Stop (${segments[0]?.operating_carrier?.name || 'Connect'})` : 'Direct (Non-stop)',
+          tag: stopCount === 0 ? 'comfort' : (idx === 0 ? 'time' : 'price'),
           offerId: offer.id,
           pipe: 'Duffel Live API',
-          flightNumber: `${carrier.iata_code || 'FL'} ${100 + idx * 35}`,
+          flightNumber: flightNum,
           bookingUrl: `https://duffel.com/`
         };
       });
@@ -381,7 +427,9 @@ app.post('/api/travel/search', async (req, res) => {
 
   // Fetch real live flight options from Duffel API
   const inboundOptions = await fetchDuffelOffers(originIata, destIata, startDate);
-  const outboundOptions = await fetchDuffelOffers(lastIata, returnIata, endDate);
+  
+  // Only query and return outbound flight options if an end date (return date) is provided
+  const outboundOptions = endDate ? await fetchDuffelOffers(lastIata, returnIata, endDate) : [];
   
   const interCityOptions = [];
   const transferOptions = [];

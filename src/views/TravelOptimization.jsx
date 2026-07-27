@@ -139,19 +139,56 @@ export const TravelOptimization = ({ onNext, itinerary = [] }) => {
     }
   };
 
+  // Helper to find best option index for a preset
+  const getBestOptionIndex = (options, preset) => {
+    if (!options || options.length === 0) return 0;
+    if (preset === 'price') {
+      let minIdx = 0;
+      let minPrice = Infinity;
+      options.forEach((opt, idx) => {
+        if (opt.price < minPrice) { minPrice = opt.price; minIdx = idx; }
+      });
+      return minIdx;
+    }
+    if (preset === 'time') {
+      let minIdx = 0;
+      let minDur = Infinity;
+      options.forEach((opt, idx) => {
+        const dur = opt.durationMins || 9999;
+        if (dur < minDur) { minDur = dur; minIdx = idx; }
+      });
+      return minIdx;
+    }
+    if (preset === 'comfort') {
+      let minIdx = 0;
+      let minStops = Infinity;
+      let minDur = Infinity;
+      options.forEach((opt, idx) => {
+        const stops = opt.stops ?? 0;
+        const dur = opt.durationMins || 9999;
+        if (stops < minStops || (stops === minStops && dur < minDur)) {
+          minStops = stops; minDur = dur; minIdx = idx;
+        }
+      });
+      return minIdx;
+    }
+    return 0;
+  };
+
   // Preset switch handler
   const handleApplyPreset = (preset) => {
     setActivePreset(preset);
-    const targetIdx = preset === 'time' ? 0 : preset === 'comfort' ? 1 : 2;
-    setSelectedInbound(Math.min(targetIdx, inboundOptions.length - 1));
-    setSelectedInter(Math.min(targetIdx, interCityOptions.length - 1));
-    setSelectedOutbound(Math.min(targetIdx, outboundOptions.length - 1));
-    setSelectedTransfer(Math.min(targetIdx, transferOptions.length - 1));
+    setSelectedInbound(getBestOptionIndex(inboundOptions, preset));
+    setSelectedInter(getBestOptionIndex(interCityOptions, preset));
+    if (outboundOptions.length > 0) {
+      setSelectedOutbound(getBestOptionIndex(outboundOptions, preset));
+    }
+    setSelectedTransfer(getBestOptionIndex(transferOptions, preset));
 
     if (dynamicSegments.length > 0) {
       const newSel = {};
       dynamicSegments.forEach(seg => {
-        newSel[seg.segmentIndex] = Math.min(targetIdx, (seg.options?.length || 1) - 1);
+        newSel[seg.segmentIndex] = getBestOptionIndex(seg.options, preset);
       });
       setSelectedSegmentOptions(newSel);
     }
@@ -164,13 +201,13 @@ export const TravelOptimization = ({ onNext, itinerary = [] }) => {
       const selOptIdx = selectedSegmentOptions[seg.segmentIndex] || 0;
       totalCost += seg.options?.[selOptIdx]?.price || 0;
     });
-    const safeTransferPrice = transferOptions[selectedTransfer]?.price || 25;
+    const safeTransferPrice = transferOptions[selectedTransfer]?.price || 0;
     totalCost += safeTransferPrice;
   } else {
-    const safeInboundPrice = inboundOptions[selectedInbound]?.price || 850;
+    const safeInboundPrice = inboundOptions[selectedInbound]?.price || 0;
     const safeInterPrice = stops.length > 1 && interCityOptions[selectedInter] ? interCityOptions[selectedInter].price : 0;
-    const safeOutboundPrice = outboundOptions[selectedOutbound]?.price || 800;
-    const safeTransferPrice = transferOptions[selectedTransfer]?.price || 25;
+    const safeOutboundPrice = endDate && outboundOptions[selectedOutbound] ? outboundOptions[selectedOutbound].price : 0;
+    const safeTransferPrice = transferOptions[selectedTransfer]?.price || 0;
     totalCost = safeInboundPrice + safeInterPrice + safeOutboundPrice + safeTransferPrice;
   }
 
@@ -186,31 +223,43 @@ export const TravelOptimization = ({ onNext, itinerary = [] }) => {
           from: seg.from,
           to: seg.to,
           provider: opt.provider,
+          flightNumber: opt.flightNumber,
           time: opt.time,
+          departureTime: opt.departureTime,
+          arrivalTime: opt.arrivalTime,
+          departureDate: opt.departureDate,
           class: opt.type,
           price: opt.price
         };
       });
-      bookedLegs.push({
-        type: 'Local Ground Transfer',
-        from: 'Airport / Terminal',
-        to: 'Hotel / Venue',
-        provider: transferOptions[selectedTransfer]?.provider || 'Grab Executive',
-        time: transferOptions[selectedTransfer]?.time || '35m',
-        price: transferOptions[selectedTransfer]?.price || 25
-      });
+      if (transferOptions.length > 0) {
+        bookedLegs.push({
+          type: 'Local Ground Transfer',
+          from: 'Airport / Terminal',
+          to: 'Hotel / Venue',
+          provider: transferOptions[selectedTransfer]?.provider || 'Airport Transfer',
+          time: transferOptions[selectedTransfer]?.time || '30m',
+          price: transferOptions[selectedTransfer]?.price || 0
+        });
+      }
     } else {
-      bookedLegs = [
-        {
+      if (inboundOptions[selectedInbound]) {
+        bookedLegs.push({
           type: 'Inbound Flight',
           from: departure,
           to: firstStop,
           provider: inboundOptions[selectedInbound].provider,
+          flightNumber: inboundOptions[selectedInbound].flightNumber,
           time: inboundOptions[selectedInbound].time,
+          departureTime: inboundOptions[selectedInbound].departureTime,
+          arrivalTime: inboundOptions[selectedInbound].arrivalTime,
+          departureDate: inboundOptions[selectedInbound].departureDate,
           class: inboundOptions[selectedInbound].type,
           price: inboundOptions[selectedInbound].price
-        },
-        ...(stops.length > 1 ? [{
+        });
+      }
+      if (stops.length > 1 && interCityOptions[selectedInter]) {
+        bookedLegs.push({
           type: 'Inter-City Transit',
           from: firstStop,
           to: lastStop,
@@ -218,25 +267,33 @@ export const TravelOptimization = ({ onNext, itinerary = [] }) => {
           time: interCityOptions[selectedInter].time,
           class: interCityOptions[selectedInter].type,
           price: interCityOptions[selectedInter].price
-        }] : []),
-        {
-          type: 'Outbound Flight',
+        });
+      }
+      if (endDate && outboundOptions[selectedOutbound]) {
+        bookedLegs.push({
+          type: 'Outbound Return Flight',
           from: lastStop,
           to: returnPlace,
           provider: outboundOptions[selectedOutbound].provider,
+          flightNumber: outboundOptions[selectedOutbound].flightNumber,
           time: outboundOptions[selectedOutbound].time,
+          departureTime: outboundOptions[selectedOutbound].departureTime,
+          arrivalTime: outboundOptions[selectedOutbound].arrivalTime,
+          departureDate: outboundOptions[selectedOutbound].departureDate,
           class: outboundOptions[selectedOutbound].type,
           price: outboundOptions[selectedOutbound].price
-        },
-        {
+        });
+      }
+      if (transferOptions[selectedTransfer]) {
+        bookedLegs.push({
           type: 'Local Ground Transfer',
           from: 'Airport',
           to: 'Hotel / Venue',
           provider: transferOptions[selectedTransfer].provider,
           time: transferOptions[selectedTransfer].time,
           price: transferOptions[selectedTransfer].price
-        }
-      ];
+        });
+      }
     }
 
     onNext({
@@ -246,8 +303,8 @@ export const TravelOptimization = ({ onNext, itinerary = [] }) => {
       endDate,
       destinationsList,
       primaryCity: firstStop,
-      flight: inboundOptions[selectedInbound],
-      transfer: transferOptions[selectedTransfer],
+      flight: inboundOptions[selectedInbound] || {},
+      transfer: transferOptions[selectedTransfer] || {},
       bookedLegs,
       totalCost
     });
@@ -741,150 +798,199 @@ export const TravelOptimization = ({ onNext, itinerary = [] }) => {
               </div>
             </div>
           ) : (
-            /* Standard Simple Roundtrip View */
+            /* Standard Simple One-way or Roundtrip Journey View */
             <div className="flex-col gap-6 mt-4">
-              <h3 className="mb-2">Journey Segments (Direct Journey)</h3>
+              <h3 className="mb-2">Journey Segments ({endDate && outboundOptions.length > 0 ? 'Roundtrip Journey' : 'One-Way Journey'})</h3>
 
               {/* Segment 1: Inbound Flight */}
-              <div className="flex-col gap-2">
-                <h4 className="text-secondary mb-1" style={{ fontSize: '1rem', fontWeight: 600 }}>
-                  Segment 1: Inbound Flight — {departure} ➔ {firstStop}
-                </h4>
-                {inboundOptions.map(option => (
-                  <Card 
-                    key={option.id} 
-                    status={selectedInbound === option.id ? 'success' : 'standard'}
-                    className="cursor-pointer transition-all hover-border-primary mb-2"
-                    onClick={() => setSelectedInbound(option.id)}
-                  >
-                    <div className="flex justify-between items-center">
-                      <div className="flex items-center gap-4">
-                        <Plane size={22} style={{ color: '#0284c7' }} />
-                        <div>
-                          <div className="font-semibold text-primary">{option.provider}</div>
-                          <div className="text-caption mt-0.5 flex items-center gap-2 flex-wrap" style={{ fontSize: '0.75rem' }}>
-                            <span>{option.type} &bull; {option.time}</span>
-                            {option.pipe && (
-                              <span style={{ fontSize: '0.68rem', fontWeight: 600, color: '#0284c7', background: '#e0f2fe', padding: '1px 6px', borderRadius: '4px' }}>
-                                {option.pipe}
-                              </span>
-                            )}
-                            {option.disruptionScore && (
-                              <span style={{ fontSize: '0.68rem', fontWeight: 500, color: '#059669', background: '#ecfdf5', padding: '1px 6px', borderRadius: '4px' }}>
-                                {option.disruptionScore}
-                              </span>
-                            )}
+              {inboundOptions.length > 0 && (
+                <div className="flex-col gap-2">
+                  <h4 className="text-secondary mb-1" style={{ fontSize: '1rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ width: '22px', height: '22px', borderRadius: '50%', background: '#0284c7', color: '#fff', fontSize: '11px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>1</span>
+                    Inbound Flight — {departure} ➔ {firstStop}
+                  </h4>
+                  {inboundOptions.map(option => (
+                    <Card 
+                      key={option.id} 
+                      status={selectedInbound === option.id ? 'success' : 'standard'}
+                      className="cursor-pointer transition-all hover-border-primary mb-2"
+                      onClick={() => setSelectedInbound(option.id)}
+                    >
+                      <div className="flex justify-between items-center flex-wrap gap-4">
+                        <div className="flex items-center gap-4">
+                          {option.logoUrl ? (
+                            <img src={option.logoUrl} alt={option.provider} style={{ width: '28px', height: '28px', objectFit: 'contain' }} />
+                          ) : (
+                            <Plane size={24} style={{ color: '#0284c7' }} />
+                          )}
+                          <div>
+                            <div className="font-semibold text-primary" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <span>{option.provider}</span>
+                              {option.flightNumber && (
+                                <span style={{ fontSize: '0.72rem', background: '#f1f5f9', color: '#475569', padding: '1px 6px', borderRadius: '4px', fontWeight: 700 }}>
+                                  {option.flightNumber}
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-caption mt-1 flex items-center gap-3 flex-wrap" style={{ fontSize: '0.8rem', color: '#334155' }}>
+                              {(option.departureTime || option.arrivalTime) && (
+                                <span style={{ fontWeight: 600, color: '#0f172a' }}>
+                                  🛫 {option.departureTime || 'TBA'} ({option.originIata}) ➔ 🛬 {option.arrivalTime || 'TBA'} ({option.destIata})
+                                </span>
+                              )}
+                              <span>&bull; {option.departureDate}</span>
+                              <span>&bull; {option.type} ({option.time})</span>
+                            </div>
                           </div>
                         </div>
-                      </div>
-                      <div className="flex items-center gap-6">
-                        {option.tag === activePreset && <Badge status="live">Recommended</Badge>}
-                        <div className="text-price">${option.price}</div>
-                        <div style={{
-                          width: '24px', height: '24px', borderRadius: '50%', flexShrink: 0,
-                          border: selectedInbound === option.id ? '2px solid #059669' : '2px solid #cbd5e1',
-                          background: selectedInbound === option.id ? '#059669' : 'transparent',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          transition: 'all 0.2s ease'
-                        }}>
-                          {selectedInbound === option.id && <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ffffff' }}></div>}
-                        </div>
-                      </div>
-                    </div>
-                  </Card>
-                ))}
-              </div>
 
-              {/* Outbound Return Flight */}
-              <div className="flex-col gap-2 mt-2">
-                <h4 className="text-secondary mb-1" style={{ fontSize: '1rem', fontWeight: 600 }}>
-                  Segment 2: Outbound Return Flight — {lastStop} ➔ {returnPlace}
-                </h4>
-                {outboundOptions.map(option => (
-                  <Card 
-                    key={option.id} 
-                    status={selectedOutbound === option.id ? 'success' : 'standard'}
-                    className="cursor-pointer transition-all hover-border-primary mb-2"
-                    onClick={() => setSelectedOutbound(option.id)}
-                  >
-                    <div className="flex justify-between items-center">
-                      <div className="flex items-center gap-4">
-                        <Plane size={22} style={{ color: '#0284c7', transform: 'rotate(180deg)' }} />
-                        <div>
-                          <div className="font-semibold text-primary">{option.provider}</div>
-                          <div className="text-caption mt-0.5 flex items-center gap-2" style={{ fontSize: '0.75rem' }}>
-                            <span>{option.type} &bull; {option.time}</span>
-                            {option.pipe && (
-                              <span style={{ fontSize: '0.68rem', fontWeight: 600, color: '#0284c7', background: '#e0f2fe', padding: '1px 6px', borderRadius: '4px' }}>
-                                {option.pipe}
-                              </span>
-                            )}
+                        <div className="flex items-center gap-4">
+                          {activePreset === 'price' && getBestOptionIndex(inboundOptions, 'price') === option.id && (
+                            <Badge status="live">Best Price</Badge>
+                          )}
+                          {activePreset === 'time' && getBestOptionIndex(inboundOptions, 'time') === option.id && (
+                            <Badge status="live">Fastest Duration</Badge>
+                          )}
+                          {activePreset === 'comfort' && getBestOptionIndex(inboundOptions, 'comfort') === option.id && (
+                            <Badge status="live">Direct &amp; Comfort</Badge>
+                          )}
+                          <div className="text-price" style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0f172a' }}>
+                            ${option.price}
+                          </div>
+                          <div style={{
+                            width: '24px', height: '24px', borderRadius: '50%', flexShrink: 0,
+                            border: selectedInbound === option.id ? '2px solid #059669' : '2px solid #cbd5e1',
+                            background: selectedInbound === option.id ? '#059669' : 'transparent',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            transition: 'all 0.2s ease'
+                          }}>
+                            {selectedInbound === option.id && <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ffffff' }}></div>}
                           </div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-6">
-                        {option.tag === activePreset && <Badge status="live">Recommended</Badge>}
-                        <div className="text-price">${option.price}</div>
-                        <div style={{
-                          width: '24px', height: '24px', borderRadius: '50%', flexShrink: 0,
-                          border: selectedOutbound === option.id ? '2px solid #059669' : '2px solid #cbd5e1',
-                          background: selectedOutbound === option.id ? '#059669' : 'transparent',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          transition: 'all 0.2s ease'
-                        }}>
-                          {selectedOutbound === option.id && <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ffffff' }}></div>}
-                        </div>
-                      </div>
-                    </div>
-                  </Card>
-                ))}
-              </div>
+                    </Card>
+                  ))}
+                </div>
+              )}
 
-              {/* Local Transfer */}
-              <div className="flex-col gap-2 mt-2">
-                <h4 className="text-secondary mb-1" style={{ fontSize: '1rem', fontWeight: 600 }}>
-                  Segment 3: Local Ground Transfer ({firstStop})
-                </h4>
-                {transferOptions.map(option => (
-                  <Card 
-                    key={option.id} 
-                    status={selectedTransfer === option.id ? 'success' : 'standard'}
-                    className="cursor-pointer transition-all hover-border-primary mb-2"
-                    onClick={() => setSelectedTransfer(option.id)}
-                  >
-                    <div className="flex justify-between items-center">
-                      <div className="flex items-center gap-4">
-                        <Bus size={22} style={{ color: '#0284c7' }} />
-                        <div>
-                          <div className="font-semibold text-primary">{option.provider}</div>
-                          <div className="text-caption mt-0.5 flex items-center gap-2" style={{ fontSize: '0.75rem' }}>
-                            <span>{option.type} &bull; {option.time}</span>
-                            {option.pipe && (
-                              <span style={{ fontSize: '0.68rem', fontWeight: 600, color: '#0284c7', background: '#e0f2fe', padding: '1px 6px', borderRadius: '4px' }}>
-                                {option.pipe}
-                              </span>
-                            )}
+              {/* Outbound Return Flight — ONLY rendered if return date (endDate) is set and offers exist */}
+              {endDate && outboundOptions.length > 0 && (
+                <div className="flex-col gap-2 mt-2">
+                  <h4 className="text-secondary mb-1" style={{ fontSize: '1rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ width: '22px', height: '22px', borderRadius: '50%', background: '#0284c7', color: '#fff', fontSize: '11px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>2</span>
+                    Outbound Return Flight — {lastStop} ➔ {returnPlace}
+                  </h4>
+                  {outboundOptions.map(option => (
+                    <Card 
+                      key={option.id} 
+                      status={selectedOutbound === option.id ? 'success' : 'standard'}
+                      className="cursor-pointer transition-all hover-border-primary mb-2"
+                      onClick={() => setSelectedOutbound(option.id)}
+                    >
+                      <div className="flex justify-between items-center flex-wrap gap-4">
+                        <div className="flex items-center gap-4">
+                          {option.logoUrl ? (
+                            <img src={option.logoUrl} alt={option.provider} style={{ width: '28px', height: '28px', objectFit: 'contain' }} />
+                          ) : (
+                            <Plane size={24} style={{ color: '#0284c7', transform: 'rotate(180deg)' }} />
+                          )}
+                          <div>
+                            <div className="font-semibold text-primary" style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                              <span>{option.provider}</span>
+                              {option.flightNumber && (
+                                <span style={{ fontSize: '0.72rem', background: '#f1f5f9', color: '#475569', padding: '1px 6px', borderRadius: '4px', fontWeight: 700 }}>
+                                  {option.flightNumber}
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-caption mt-1 flex items-center gap-3 flex-wrap" style={{ fontSize: '0.8rem', color: '#334155' }}>
+                              {(option.departureTime || option.arrivalTime) && (
+                                <span style={{ fontWeight: 600, color: '#0f172a' }}>
+                                  🛫 {option.departureTime || 'TBA'} ({option.originIata}) ➔ 🛬 {option.arrivalTime || 'TBA'} ({option.destIata})
+                                </span>
+                              )}
+                              <span>&bull; {option.departureDate}</span>
+                              <span>&bull; {option.type} ({option.time})</span>
+                            </div>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-4">
+                          {activePreset === 'price' && getBestOptionIndex(outboundOptions, 'price') === option.id && (
+                            <Badge status="live">Best Price</Badge>
+                          )}
+                          {activePreset === 'time' && getBestOptionIndex(outboundOptions, 'time') === option.id && (
+                            <Badge status="live">Fastest Duration</Badge>
+                          )}
+                          {activePreset === 'comfort' && getBestOptionIndex(outboundOptions, 'comfort') === option.id && (
+                            <Badge status="live">Direct &amp; Comfort</Badge>
+                          )}
+                          <div className="text-price" style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0f172a' }}>
+                            ${option.price}
+                          </div>
+                          <div style={{
+                            width: '24px', height: '24px', borderRadius: '50%', flexShrink: 0,
+                            border: selectedOutbound === option.id ? '2px solid #059669' : '2px solid #cbd5e1',
+                            background: selectedOutbound === option.id ? '#059669' : 'transparent',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            transition: 'all 0.2s ease'
+                          }}>
+                            {selectedOutbound === option.id && <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ffffff' }}></div>}
                           </div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-6">
-                        {option.tag === activePreset && <Badge status="live">Recommended</Badge>}
-                        <div className="text-price">${option.price}</div>
-                        <div style={{
-                          width: '24px', height: '24px', borderRadius: '50%', flexShrink: 0,
-                          border: selectedTransfer === option.id ? '2px solid #059669' : '2px solid #cbd5e1',
-                          background: selectedTransfer === option.id ? '#059669' : 'transparent',
-                          display: 'flex', alignItems: 'center', justifyContent: 'center',
-                          transition: 'all 0.2s ease'
-                        }}>
-                          {selectedTransfer === option.id && <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ffffff' }}></div>}
+                    </Card>
+                  ))}
+                </div>
+              )}
+
+              {/* Local Ground Transfer Segment */}
+              {transferOptions.length > 0 && (
+                <div className="flex-col gap-2 mt-2">
+                  <h4 className="text-secondary mb-1" style={{ fontSize: '1rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <span style={{ width: '22px', height: '22px', borderRadius: '50%', background: '#0284c7', color: '#fff', fontSize: '11px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      {endDate && outboundOptions.length > 0 ? '3' : '2'}
+                    </span>
+                    Local Destination Ground Transfer ({firstStop})
+                  </h4>
+                  {transferOptions.map(option => (
+                    <Card 
+                      key={option.id} 
+                      status={selectedTransfer === option.id ? 'success' : 'standard'}
+                      className="cursor-pointer transition-all hover-border-primary mb-2"
+                      onClick={() => setSelectedTransfer(option.id)}
+                    >
+                      <div className="flex justify-between items-center flex-wrap gap-4">
+                        <div className="flex items-center gap-4">
+                          <Bus size={24} style={{ color: '#0284c7' }} />
+                          <div>
+                            <div className="font-semibold text-primary">{option.provider}</div>
+                            <div className="text-caption mt-0.5 flex items-center gap-2" style={{ fontSize: '0.75rem' }}>
+                              <span>{option.type} &bull; {option.time}</span>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-4">
+                          <div className="text-price" style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0f172a' }}>
+                            ${option.price}
+                          </div>
+                          <div style={{
+                            width: '24px', height: '24px', borderRadius: '50%', flexShrink: 0,
+                            border: selectedTransfer === option.id ? '2px solid #059669' : '2px solid #cbd5e1',
+                            background: selectedTransfer === option.id ? '#059669' : 'transparent',
+                            display: 'flex', alignItems: 'center', justifyContent: 'center',
+                            transition: 'all 0.2s ease'
+                          }}>
+                            {selectedTransfer === option.id && <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ffffff' }}></div>}
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </Card>
-                ))}
-              </div>
+                    </Card>
+                  ))}
+                </div>
+              )}
             </div>
+
           )}
 
           {/* Total Cost Summary Bar & Action */}
