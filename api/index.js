@@ -206,28 +206,138 @@ app.get('/api/itinerary/pass', (req, res) => {
   res.json({ success: true, pass });
 });
 
-// ─── DESTINATION AUTOCOMPLETE (proxy to Photon) ──────────────
+// ─── IATA AIRPORT CODE DIRECTORY ──────────────────────────────
+const IATA_MAP = {
+  FRA: { city: 'Frankfurt', country: 'Germany', name: 'Frankfurt Airport (FRA)' },
+  SIN: { city: 'Singapore', country: 'Singapore', name: 'Singapore Changi Airport (SIN)' },
+  BKK: { city: 'Bangkok', country: 'Thailand', name: 'Suvarnabhumi Airport (BKK)' },
+  DMK: { city: 'Bangkok', country: 'Thailand', name: 'Don Mueang Airport (DMK)' },
+  DXB: { city: 'Dubai', country: 'UAE', name: 'Dubai International Airport (DXB)' },
+  DOH: { city: 'Doha', country: 'Qatar', name: 'Hamad International Airport (DOH)' },
+  AUH: { city: 'Abu Dhabi', country: 'UAE', name: 'Zayed International Airport (AUH)' },
+  HND: { city: 'Tokyo', country: 'Japan', name: 'Haneda Airport (HND)' },
+  NRT: { city: 'Tokyo', country: 'Japan', name: 'Narita International Airport (NRT)' },
+  KIX: { city: 'Osaka', country: 'Japan', name: 'Kansai International Airport (KIX)' },
+  ICN: { city: 'Seoul', country: 'South Korea', name: 'Incheon International Airport (ICN)' },
+  HKG: { city: 'Hong Kong', country: 'Hong Kong', name: 'Hong Kong International Airport (HKG)' },
+  TPE: { city: 'Taipei', country: 'Taiwan', name: 'Taoyuan International Airport (TPE)' },
+  SGN: { city: 'Ho Chi Minh City', country: 'Vietnam', name: 'Tan Son Nhat Airport (SGN)' },
+  HAN: { city: 'Hanoi', country: 'Vietnam', name: 'Noi Bai International Airport (HAN)' },
+  KUL: { city: 'Kuala Lumpur', country: 'Malaysia', name: 'Kuala Lumpur Airport (KUL)' },
+  CGK: { city: 'Jakarta', country: 'Indonesia', name: 'Soekarno-Hatta Airport (CGK)' },
+  DPS: { city: 'Bali', country: 'Indonesia', name: 'Ngurah Rai Airport (DPS)' },
+  MNL: { city: 'Manila', country: 'Philippines', name: 'Ninoy Aquino Airport (MNL)' },
+  LHR: { city: 'London', country: 'United Kingdom', name: 'Heathrow Airport (LHR)' },
+  LGW: { city: 'London', country: 'United Kingdom', name: 'Gatwick Airport (LGW)' },
+  CDG: { city: 'Paris', country: 'France', name: 'Charles de Gaulle Airport (CDG)' },
+  ORY: { city: 'Paris', country: 'France', name: 'Orly Airport (ORY)' },
+  AMS: { city: 'Amsterdam', country: 'Netherlands', name: 'Schiphol Airport (AMS)' },
+  BER: { city: 'Berlin', country: 'Germany', name: 'Berlin Brandenburg Airport (BER)' },
+  MUC: { city: 'Munich', country: 'Germany', name: 'Munich Airport (MUC)' },
+  ZRH: { city: 'Zurich', country: 'Switzerland', name: 'Zurich Airport (ZRH)' },
+  VIE: { city: 'Vienna', country: 'Austria', name: 'Vienna International Airport (VIE)' },
+  FCO: { city: 'Rome', country: 'Italy', name: 'Leonardo da Vinci–Fiumicino Airport (FCO)' },
+  MXP: { city: 'Milan', country: 'Italy', name: 'Malpensa Airport (MXP)' },
+  MAD: { city: 'Madrid', country: 'Spain', name: 'Adolfo Suárez Madrid–Barajas (MAD)' },
+  BCN: { city: 'Barcelona', country: 'Spain', name: 'Josep Tarradellas Barcelona-El Prat (BCN)' },
+  CPH: { city: 'Copenhagen', country: 'Denmark', name: 'Copenhagen Airport (CPH)' },
+  ARN: { city: 'Stockholm', country: 'Sweden', name: 'Stockholm Arlanda Airport (ARN)' },
+  OSL: { city: 'Oslo', country: 'Norway', name: 'Oslo Airport (OSL)' },
+  HEL: { city: 'Helsinki', country: 'Finland', name: 'Helsinki Airport (HEL)' },
+  JFK: { city: 'New York', country: 'United States', name: 'John F. Kennedy Airport (JFK)' },
+  EWR: { city: 'New York', country: 'United States', name: 'Newark Liberty Airport (EWR)' },
+  LGA: { city: 'New York', country: 'United States', name: 'LaGuardia Airport (LGA)' },
+  LAX: { city: 'Los Angeles', country: 'United States', name: 'Los Angeles International (LAX)' },
+  SFO: { city: 'San Francisco', country: 'United States', name: 'San Francisco International (SFO)' },
+  ORD: { city: 'Chicago', country: 'United States', name: 'O\'Hare International Airport (ORD)' },
+  MIA: { city: 'Miami', country: 'United States', name: 'Miami International Airport (MIA)' },
+  SEA: { city: 'Seattle', country: 'United States', name: 'Seattle-Tacoma International (SEA)' },
+  BOS: { city: 'Boston', country: 'United States', name: 'Logan International Airport (BOS)' },
+  DEN: { city: 'Denver', country: 'United States', name: 'Denver International Airport (DEN)' },
+  DFW: { city: 'Dallas', country: 'United States', name: 'Dallas/Fort Worth International (DFW)' },
+  ATL: { city: 'Atlanta', country: 'United States', name: 'Hartsfield-Jackson Atlanta (ATL)' },
+  YVR: { city: 'Vancouver', country: 'Canada', name: 'Vancouver International Airport (YVR)' },
+  YYZ: { city: 'Toronto', country: 'Canada', name: 'Toronto Pearson International (YYZ)' },
+  SYD: { city: 'Sydney', country: 'Australia', name: 'Sydney Kingsford Smith Airport (SYD)' },
+  MEL: { city: 'Melbourne', country: 'Australia', name: 'Melbourne Airport (MEL)' },
+  AKL: { city: 'Auckland', country: 'New Zealand', name: 'Auckland Airport (AKL)' },
+  DEL: { city: 'New Delhi', country: 'India', name: 'Indira Gandhi International (DEL)' },
+  BOM: { city: 'Mumbai', country: 'India', name: 'Chhatrapati Shivaji Maharaj (BOM)' },
+  BLR: { city: 'Bengaluru', country: 'India', name: 'Kempegowda International (BLR)' },
+  MEX: { city: 'Mexico City', country: 'Mexico', name: 'Benito Juárez International (MEX)' },
+  GRU: { city: 'São Paulo', country: 'Brazil', name: 'Guarulhos International Airport (GRU)' },
+  EZE: { city: 'Buenos Aires', country: 'Argentina', name: 'Ezeiza International Airport (EZE)' },
+  CAI: { city: 'Cairo', country: 'Egypt', name: 'Cairo International Airport (CAI)' },
+  JNB: { city: 'Johannesburg', country: 'South Africa', name: 'O. R. Tambo International (JNB)' },
+  CPT: { city: 'Cape Town', country: 'South Africa', name: 'Cape Town International (CPT)' },
+};
+
+// ─── DESTINATION AUTOCOMPLETE (proxy to Photon with IATA + City filtering) ──
 app.get('/api/autocomplete/destinations', async (req, res) => {
-  const q = req.query.q || '';
-  if (q.length < 2) return res.json({ suggestions: [] });
+  const rawQ = (req.query.q || '').trim();
+  if (rawQ.length < 2) return res.json({ suggestions: [] });
+
+  const upperQ = rawQ.toUpperCase();
+  const suggestions = [];
+
+  // Check exact 3-letter IATA code match first
+  if (upperQ.length === 3 && IATA_MAP[upperQ]) {
+    const item = IATA_MAP[upperQ];
+    suggestions.push({
+      display: `${item.city} (${upperQ}), ${item.country}`,
+      city: item.city,
+      country: item.country,
+      iata: upperQ,
+    });
+  }
+
   try {
     const { data } = await axios.get('https://photon.komoot.io/api/', {
-      params: { q, limit: 6, lang: 'en' },
+      params: { q: rawQ, limit: 10, lang: 'en' },
       timeout: 4000,
     });
-    const suggestions = (data.features || []).map(f => {
-      const p = f.properties || {};
-      const name = p.name || '';
-      const city = p.city || p.county || '';
-      const country = p.country || '';
-      const parts = [name, city !== name ? city : '', country].filter(Boolean);
-      const display = [...new Set(parts)].join(', ');
-      return { display, lat: f.geometry?.coordinates?.[1], lon: f.geometry?.coordinates?.[0] };
-    }).filter((s, i, a) => s.display && a.findIndex(x => x.display === s.display) === i);
-    res.json({ suggestions });
+
+    const photonItems = (data.features || [])
+      .filter(f => {
+        const p = f.properties || {};
+        const type = (p.type || '').toLowerCase();
+        const osmVal = (p.osm_value || '').toLowerCase();
+
+        // SKIP countries, continents, broad states/regions
+        if (type === 'country' || osmVal === 'country' || type === 'continent') return false;
+        if ((type === 'state' || osmVal === 'state' || osmVal === 'province') && !p.city && !p.town) return false;
+
+        return true;
+      })
+      .map(f => {
+        const p = f.properties || {};
+        const name = p.name || '';
+        const city = p.city || p.town || p.village || p.county || '';
+        const country = p.country || '';
+
+        // If the name is just a country, skip
+        if (country && name.toLowerCase() === country.toLowerCase()) return null;
+
+        // Build clean "City/Place, Country" string
+        const mainLabel = name || city;
+        let display = mainLabel;
+        if (city && city !== mainLabel) display += `, ${city}`;
+        if (country) display += `, ${country}`;
+
+        return { display, city: city || mainLabel, country, lat: f.geometry?.coordinates?.[1], lon: f.geometry?.coordinates?.[0] };
+      })
+      .filter(Boolean);
+
+    for (const item of photonItems) {
+      if (!suggestions.some(s => s.display === item.display)) {
+        suggestions.push(item);
+      }
+    }
+
+    res.json({ suggestions: suggestions.slice(0, 6) });
   } catch (err) {
     console.error('Autocomplete proxy error:', err.message);
-    res.json({ suggestions: [] });
+    res.json({ suggestions: suggestions.slice(0, 6) });
   }
 });
 
