@@ -304,8 +304,25 @@ app.post('/api/travel/search', async (req, res) => {
   const lastDest = destinations[destinations.length - 1] || firstDest;
 
   const extractIata = (str) => {
-    const match = (str || '').match(/\(([A-Z]{3})\)/);
-    return match ? match[1] : (str || '').slice(0, 3).toUpperCase();
+    if (!str) return 'SIN';
+    const match = str.match(/\(([A-Z]{3})\)/i);
+    if (match) return match[1].toUpperCase();
+
+    const cleanStr = str.trim().toUpperCase();
+    if (cleanStr.length === 3 && IATA_MAP[cleanStr]) return cleanStr;
+
+    const lower = str.toLowerCase();
+    for (const [code, item] of Object.entries(IATA_MAP)) {
+      if (
+        item.city.toLowerCase() === lower ||
+        lower.includes(item.city.toLowerCase()) ||
+        item.country.toLowerCase() === lower
+      ) {
+        return code;
+      }
+    }
+
+    return cleanStr.slice(0, 3);
   };
 
   const originIata = extractIata(departure);
