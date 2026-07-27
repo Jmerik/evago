@@ -36,6 +36,8 @@ export const EventDiscovery = ({ onNext }) => {
   // Private Trip State (Multiple Destinations)
   const [selectedDestinations, setSelectedDestinations] = useState([]);
   const [destInputText, setDestInputText] = useState('');
+  const [destDateInput, setDestDateInput] = useState('');
+  const [destTimeInput, setDestTimeInput] = useState('');
   const [destSuggestions, setDestSuggestions] = useState([]);
   const [destLoading, setDestLoading] = useState(false);
   const [destDropdownOpen, setDestDropdownOpen] = useState(false);
@@ -52,13 +54,19 @@ export const EventDiscovery = ({ onNext }) => {
   const destInputRef = useRef(null);
   const destDropdownRef = useRef(null);
 
-  const addDestination = (destName) => {
+  const addDestination = (destName, initialDate = '', initialTime = '') => {
     const trimmed = (destName || '').trim();
     if (!trimmed) return;
     if (!selectedDestinations.find(d => d.name === trimmed)) {
-      setSelectedDestinations(prev => [...prev, { name: trimmed, date: '', time: '' }]);
+      setSelectedDestinations(prev => [...prev, { 
+        name: trimmed, 
+        date: initialDate || destDateInput, 
+        time: initialTime || destTimeInput 
+      }]);
     }
     setDestInputText('');
+    setDestDateInput('');
+    setDestTimeInput('');
     setDestDropdownOpen(false);
     setDestSuggestions([]);
   };
@@ -445,7 +453,6 @@ export const EventDiscovery = ({ onNext }) => {
                         <input
                           type="time"
                           value={stop.time}
-                          disabled={!stop.date}
                           onChange={e => updateStopField(idx, 'time', e.target.value)}
                           style={{
                             padding: '5px 8px',
@@ -454,22 +461,21 @@ export const EventDiscovery = ({ onNext }) => {
                             fontSize: '0.82rem',
                             color: stop.time ? '#0f172a' : '#94a3b8',
                             outline: 'none',
-                            background: stop.date ? '#f8fafc' : '#f1f5f9',
-                            cursor: stop.date ? 'pointer' : 'not-allowed',
-                            opacity: stop.date ? 1 : 0.5,
+                            background: '#f8fafc',
+                            cursor: 'pointer',
                           }}
                         />
                       </div>
 
                       {/* Scheduled badge */}
-                      {stop.date && (
+                      {(stop.date || stop.time) && (
                         <span style={{
                           fontSize: '0.72rem', fontWeight: 600,
                           background: '#dcfce7', color: '#15803d',
                           padding: '3px 8px', borderRadius: '6px',
                           whiteSpace: 'nowrap'
                         }}>
-                          ✓ Scheduled
+                          ✓ {stop.date && stop.time ? 'Date & Time Set' : stop.date ? 'Date Set' : 'Time Set'}
                         </span>
                       )}
 
@@ -504,164 +510,207 @@ export const EventDiscovery = ({ onNext }) => {
                 color: '#94a3b8',
                 fontSize: '0.875rem'
               }}>
-                No destinations added yet. Type a city or airport code below to start!
+                No destinations added yet. Enter location, date & time below to add a stop!
               </div>
             )}
 
             {/* Input & Add Container */}
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-              <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#0f172a' }}>
-                Add City or Airport Code *
-              </label>
-              
-              <div style={{ display: 'flex', gap: '8px', position: 'relative' }}>
-                <div style={{ position: 'relative', flex: 1 }}>
-                  <span style={{
-                    position: 'absolute',
-                    left: '12px',
-                    top: '50%',
-                    transform: 'translateY(-50%)',
-                    color: '#0284c7',
-                    display: 'flex',
-                    pointerEvents: 'none'
-                  }}>
-                    <MapPin size={18} />
-                  </span>
-
-                  <input
-                    ref={destInputRef}
-                    type="text"
-                    style={{
-                      width: '100%',
-                      padding: '12px 14px 12px 38px',
-                      border: '1.5px solid #cbd5e1',
-                      borderRadius: '8px',
-                      outline: 'none',
-                      fontSize: '0.95rem',
-                      color: '#0f172a',
-                      background: '#ffffff',
-                      boxSizing: 'border-box',
-                      transition: 'border-color 0.15s ease, box-shadow 0.15s ease'
-                    }}
-                    placeholder="e.g. Frankfurt, Tokyo, SIN, or FRA..."
-                    value={destInputText}
-                    autoComplete="off"
-                    spellCheck="false"
-                    onChange={e => {
-                      setDestInputText(e.target.value);
-                      fetchDestinationSuggestions(e.target.value);
-                    }}
-                    onFocus={(e) => {
-                      e.target.style.borderColor = '#0284c7';
-                      e.target.style.boxShadow = '0 0 0 3px rgba(2, 132, 199, 0.15)';
-                      if (destSuggestions.length > 0) setDestDropdownOpen(true);
-                    }}
-                    onBlur={(e) => {
-                      e.target.style.borderColor = '#cbd5e1';
-                      e.target.style.boxShadow = 'none';
-                    }}
-                    onKeyDown={handleDestKeyDown}
-                  />
-
-                  {destLoading && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '8px' }}>
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr auto auto', gap: '8px', alignItems: 'end' }}>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#0f172a' }}>
+                    City or Airport Code *
+                  </label>
+                  <div style={{ position: 'relative' }}>
                     <span style={{
-                      position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)',
-                      pointerEvents: 'none', display: 'flex', color: '#0284c7'
+                      position: 'absolute',
+                      left: '12px',
+                      top: '50%',
+                      transform: 'translateY(-50%)',
+                      color: '#0284c7',
+                      display: 'flex',
+                      pointerEvents: 'none'
                     }}>
-                      <Loader2 size={16} className="animate-spin" />
+                      <MapPin size={18} />
                     </span>
-                  )}
 
-                  {/* Dropdown Suggestions */}
-                  {destDropdownOpen && destSuggestions.length > 0 && (
-                    <ul
-                      ref={destDropdownRef}
+                    <input
+                      ref={destInputRef}
+                      type="text"
                       style={{
-                        position: 'fixed',
-                        top: destRect.top + 4,
-                        left: destRect.left,
-                        width: destRect.width,
-                        zIndex: 99999,
-                        background: '#ffffff',
-                        border: '1px solid #cbd5e1',
+                        width: '100%',
+                        padding: '10px 14px 10px 38px',
+                        border: '1.5px solid #cbd5e1',
                         borderRadius: '8px',
-                        boxShadow: '0 12px 36px rgba(15, 23, 42, 0.16)',
-                        listStyle: 'none',
-                        margin: 0,
-                        padding: '6px 0',
-                        maxHeight: '240px',
-                        overflowY: 'auto',
+                        outline: 'none',
+                        fontSize: '0.9rem',
+                        color: '#0f172a',
+                        background: '#ffffff',
+                        boxSizing: 'border-box',
+                        transition: 'border-color 0.15s ease, box-shadow 0.15s ease'
                       }}
-                    >
-                      {destSuggestions.map((s, idx) => (
-                        <li
-                          key={idx}
-                          onMouseDown={e => {
-                            e.preventDefault();
-                            addDestination(s.display);
-                          }}
-                          onMouseEnter={() => setDestHighlight(idx)}
-                          style={{
-                            padding: '10px 14px',
-                            cursor: 'pointer',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '10px',
-                            backgroundColor: destHighlight === idx ? '#f0f9ff' : '#ffffff',
-                            color: '#0f172a',
-                            fontSize: '14px',
-                            lineHeight: '1.4',
-                          }}
-                        >
-                          <MapPin size={15} style={{ flexShrink: 0, color: '#0284c7' }} />
-                          <span style={{ flex: 1 }}>{s.display}</span>
-                          {s.iata && (
-                            <span style={{
-                              fontSize: '11px',
-                              fontWeight: 700,
-                              background: '#e0f2fe',
-                              color: '#0369a1',
-                              padding: '2px 6px',
-                              borderRadius: '4px'
-                            }}>
-                              {s.iata}
-                            </span>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  )}
+                      placeholder="e.g. Frankfurt, SIN, Tokyo..."
+                      value={destInputText}
+                      autoComplete="off"
+                      spellCheck="false"
+                      onChange={e => {
+                        setDestInputText(e.target.value);
+                        fetchDestinationSuggestions(e.target.value);
+                      }}
+                      onFocus={(e) => {
+                        e.target.style.borderColor = '#0284c7';
+                        e.target.style.boxShadow = '0 0 0 3px rgba(2, 132, 199, 0.15)';
+                        if (destSuggestions.length > 0) setDestDropdownOpen(true);
+                      }}
+                      onBlur={(e) => {
+                        e.target.style.borderColor = '#cbd5e1';
+                        e.target.style.boxShadow = 'none';
+                      }}
+                      onKeyDown={handleDestKeyDown}
+                    />
+
+                    {destLoading && (
+                      <span style={{
+                        position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)',
+                        pointerEvents: 'none', display: 'flex', color: '#0284c7'
+                      }}>
+                        <Loader2 size={16} className="animate-spin" />
+                      </span>
+                    )}
+
+                    {/* Dropdown Suggestions */}
+                    {destDropdownOpen && destSuggestions.length > 0 && (
+                      <ul
+                        ref={destDropdownRef}
+                        style={{
+                          position: 'fixed',
+                          top: destRect.top + 4,
+                          left: destRect.left,
+                          width: destRect.width,
+                          zIndex: 99999,
+                          background: '#ffffff',
+                          border: '1px solid #cbd5e1',
+                          borderRadius: '8px',
+                          boxShadow: '0 12px 36px rgba(15, 23, 42, 0.16)',
+                          listStyle: 'none',
+                          margin: 0,
+                          padding: '6px 0',
+                          maxHeight: '240px',
+                          overflowY: 'auto',
+                        }}
+                      >
+                        {destSuggestions.map((s, idx) => (
+                          <li
+                            key={idx}
+                            onMouseDown={e => {
+                              e.preventDefault();
+                              addDestination(s.display);
+                            }}
+                            onMouseEnter={() => setDestHighlight(idx)}
+                            style={{
+                              padding: '10px 14px',
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '10px',
+                              backgroundColor: destHighlight === idx ? '#f0f9ff' : '#ffffff',
+                              color: '#0f172a',
+                              fontSize: '14px',
+                              lineHeight: '1.4',
+                            }}
+                          >
+                            <MapPin size={15} style={{ flexShrink: 0, color: '#0284c7' }} />
+                            <span style={{ flex: 1 }}>{s.display}</span>
+                            {s.iata && (
+                              <span style={{
+                                fontSize: '11px',
+                                fontWeight: 700,
+                                background: '#e0f2fe',
+                                color: '#0369a1',
+                                padding: '2px 6px',
+                                borderRadius: '4px'
+                              }}>
+                                {s.iata}
+                              </span>
+                            )}
+                          </li>
+                        ))}
+                      </ul>
+                    )}
+                  </div>
                 </div>
 
-                <button
-                  type="button"
-                  onMouseDown={(e) => {
-                    e.preventDefault();
-                    if (destInputText.trim()) addDestination(destInputText);
-                  }}
-                  onClick={() => {
-                    if (destInputText.trim()) addDestination(destInputText);
-                  }}
-                  disabled={!destInputText.trim()}
-                  style={{
-                    padding: '0 20px',
-                    borderRadius: '8px',
-                    border: 'none',
-                    background: destInputText.trim() ? '#0284c7' : '#e2e8f0',
-                    color: destInputText.trim() ? '#ffffff' : '#94a3b8',
-                    fontWeight: 600,
-                    fontSize: '0.9rem',
-                    cursor: destInputText.trim() ? 'pointer' : 'not-allowed',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '6px',
-                    transition: 'all 0.15s ease',
-                    boxShadow: destInputText.trim() ? '0 2px 8px rgba(2, 132, 199, 0.25)' : 'none'
-                  }}
-                >
-                  <Plus size={16} /> Add Stop
-                </button>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#0f172a' }}>
+                    Date
+                  </label>
+                  <input
+                    type="date"
+                    value={destDateInput}
+                    onChange={e => setDestDateInput(e.target.value)}
+                    style={{
+                      padding: '9px 10px',
+                      border: '1.5px solid #cbd5e1',
+                      borderRadius: '8px',
+                      fontSize: '0.85rem',
+                      outline: 'none',
+                      background: '#ffffff',
+                      color: '#0f172a'
+                    }}
+                  />
+                </div>
+
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#0f172a' }}>
+                    Time
+                  </label>
+                  <input
+                    type="time"
+                    value={destTimeInput}
+                    onChange={e => setDestTimeInput(e.target.value)}
+                    style={{
+                      padding: '9px 10px',
+                      border: '1.5px solid #cbd5e1',
+                      borderRadius: '8px',
+                      fontSize: '0.85rem',
+                      outline: 'none',
+                      background: '#ffffff',
+                      color: '#0f172a'
+                    }}
+                  />
+                </div>
               </div>
+
+              <button
+                type="button"
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  if (destInputText.trim()) addDestination(destInputText);
+                }}
+                onClick={() => {
+                  if (destInputText.trim()) addDestination(destInputText);
+                }}
+                disabled={!destInputText.trim()}
+                style={{
+                  marginTop: '4px',
+                  padding: '12px 20px',
+                  borderRadius: '8px',
+                  border: 'none',
+                  background: destInputText.trim() ? '#0284c7' : '#e2e8f0',
+                  color: destInputText.trim() ? '#ffffff' : '#94a3b8',
+                  fontWeight: 600,
+                  fontSize: '0.9rem',
+                  cursor: destInputText.trim() ? 'pointer' : 'not-allowed',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  gap: '6px',
+                  transition: 'all 0.15s ease',
+                  boxShadow: destInputText.trim() ? '0 2px 8px rgba(2, 132, 199, 0.25)' : 'none'
+                }}
+              >
+                <Plus size={16} /> Add Stop to Route
+              </button>
             </div>
 
             {/* Action CTA Button */}
