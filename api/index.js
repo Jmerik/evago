@@ -499,6 +499,69 @@ app.post('/api/travel/search', async (req, res) => {
     }
   ];
 
+  // Build multi-segment breakdown if multi-stop itinerary
+  const routeStops = [departure, ...destinations, returnPlace];
+  const dynamicSegments = [];
+
+  for (let i = 0; i < routeStops.length - 1; i++) {
+    const fromLoc = routeStops[i];
+    const toLoc = routeStops[i + 1];
+    const fromIata = extractIata(fromLoc);
+    const toIata = extractIata(toLoc);
+    const isFlightLeg = i === 0 || i === routeStops.length - 2;
+
+    const segOptions = [
+      {
+        id: 0,
+        provider: isFlightLeg 
+          ? `${fromIata === 'FRA' ? 'Lufthansa' : fromIata === 'SIN' ? 'Singapore Airlines' : fromIata === 'KTI' ? 'Cambodia Angkor Air' : 'British Airways'} (Duffel Direct)`
+          : 'High-Speed Rail Express (12Go Partner)',
+        time: isFlightLeg ? '12h 40m' : '2h 15m',
+        price: isFlightLeg ? Math.round(750 + (i * 120)) : 140,
+        type: isFlightLeg ? 'Direct Flight (Non-stop)' : 'Express Shinkansen / Rail',
+        tag: 'time',
+        pipe: isFlightLeg ? 'Duffel API — Primary Flight Pipe' : '12Go API / Reseller Program',
+        flightNumber: isFlightLeg ? `SQ ${200 + i * 15}` : 'SHK 104',
+        disruptionScore: '98.5% On-Time (AviationStack Tracked)'
+      },
+      {
+        id: 1,
+        provider: isFlightLeg
+          ? 'Emirates / Qatar Airways (Travelpayouts Data)'
+          : 'Regional Express Transit (Easybook SOAP)',
+        time: isFlightLeg ? '14h 15m' : '1h 30m',
+        price: isFlightLeg ? Math.round(620 + (i * 90)) : 185,
+        type: isFlightLeg ? '1 Stop via Hub' : 'Direct Intercity Air/Rail',
+        tag: 'comfort',
+        pipe: isFlightLeg ? 'Travelpayouts Data API' : 'Easybook Partner Web Services',
+        flightNumber: isFlightLeg ? `EK ${350 + i * 10}` : 'EB 502',
+        disruptionScore: '96.4% On-Time (AeroDataBox Tracked)'
+      },
+      {
+        id: 2,
+        provider: isFlightLeg
+          ? 'AirAsia / Regional Carrier (Kiwi Tequila)'
+          : '12Go Highway Express Coach',
+        time: isFlightLeg ? '16h 00m' : '5h 30m',
+        price: isFlightLeg ? Math.round(480 + (i * 60)) : 45,
+        type: isFlightLeg ? '1 Stop Low-Cost Connector' : 'Luxury Highway Bus',
+        tag: 'price',
+        pipe: isFlightLeg ? 'Kiwi Tequila API — Fallback' : '12Go Affiliate API',
+        flightNumber: isFlightLeg ? `AK ${800 + i * 20}` : 'BUS 88',
+        disruptionScore: '94.0% On-Time'
+      }
+    ];
+
+    dynamicSegments.push({
+      segmentIndex: i + 1,
+      title: `Segment ${i + 1}: ${fromLoc} ➔ ${toLoc}`,
+      from: fromLoc,
+      to: toLoc,
+      isFlightLeg,
+      options: segOptions
+    });
+  }
+
   res.json({
     success: true,
     origin: departure,
@@ -510,6 +573,7 @@ app.post('/api/travel/search', async (req, res) => {
     interCityOptions,
     outboundOptions,
     transferOptions,
+    dynamicSegments,
     apiPipesUsed: [
       { name: 'Luma API', status: 'Active', category: 'Event Discovery' },
       { name: 'Duffel API', status: 'Primary Active', category: 'Flight Booking' },
@@ -522,6 +586,7 @@ app.post('/api/travel/search', async (req, res) => {
     ]
   });
 });
+
 
 // ─── HEALTH ───────────────────────────────────────────────────
 app.get('/api/health', (_req, res) => {

@@ -102,7 +102,10 @@ export const TravelOptimization = ({ onNext, itinerary = [] }) => {
     { id: 2, provider: 'Grab Airport Shuttle (Grab Share)', time: '50m', price: 15, type: 'Shared Express Shuttle', tag: 'price', pipe: 'Grab Developer API' },
   ]);
 
-  const [apiPipesUsed, setApiPipesUsed] = useState([]);
+  const [dynamicSegments, setDynamicSegments] = useState([]);
+  const [selectedSegmentOptions, setSelectedSegmentOptions] = useState({});
+
+  const [hasSearched, setHasSearched] = useState(false);
   const [isSearchingPipes, setIsSearchingPipes] = useState(false);
 
   const [selectedInbound, setSelectedInbound] = useState(0);
@@ -110,107 +113,140 @@ export const TravelOptimization = ({ onNext, itinerary = [] }) => {
   const [selectedOutbound, setSelectedOutbound] = useState(0);
   const [selectedTransfer, setSelectedTransfer] = useState(0);
 
-  // Perform live multi-provider API search whenever search inputs change
-  useEffect(() => {
-    let isCancelled = false;
-    const executeSearch = async () => {
-      setIsSearchingPipes(true);
-      try {
-        const res = await evagoApi.searchTravelOptions({
-          departure,
-          returnPlace,
-          destinations: stops,
-          startDate,
-          endDate,
-        });
-        if (!isCancelled && res.success) {
-          if (res.inboundOptions?.length > 0) setInboundOptions(res.inboundOptions);
-          if (res.interCityOptions) setInterCityOptions(res.interCityOptions);
-          if (res.outboundOptions?.length > 0) setOutboundOptions(res.outboundOptions);
-          if (res.transferOptions?.length > 0) setTransferOptions(res.transferOptions);
-          if (res.apiPipesUsed) setApiPipesUsed(res.apiPipesUsed);
+  // Trigger search on explicit user action or initial search button click
+  const handlePerformSearch = async () => {
+    setHasSearched(true);
+    setIsSearchingPipes(true);
+    try {
+      const res = await evagoApi.searchTravelOptions({
+        departure,
+        returnPlace,
+        destinations: stops,
+        startDate,
+        endDate,
+      });
+      if (res.success) {
+        if (res.inboundOptions?.length > 0) setInboundOptions(res.inboundOptions);
+        if (res.interCityOptions) setInterCityOptions(res.interCityOptions);
+        if (res.outboundOptions?.length > 0) setOutboundOptions(res.outboundOptions);
+        if (res.transferOptions?.length > 0) setTransferOptions(res.transferOptions);
+        if (res.dynamicSegments?.length > 0) {
+          setDynamicSegments(res.dynamicSegments);
+          // Initialize selected option 0 for each segment
+          const initSel = {};
+          res.dynamicSegments.forEach(seg => {
+            initSel[seg.segmentIndex] = 0;
+          });
+          setSelectedSegmentOptions(initSel);
         }
-      } catch (err) {
-        console.error('Travel search API error:', err);
-      } finally {
-        if (!isCancelled) setIsSearchingPipes(false);
+        if (res.apiPipesUsed) setApiPipesUsed(res.apiPipesUsed);
       }
-    };
-
-    const timer = setTimeout(executeSearch, 400);
-    return () => {
-      isCancelled = true;
-      clearTimeout(timer);
-    };
-  }, [departure, returnPlace, stops.join(','), startDate, endDate]);
+    } catch (err) {
+      console.error('Travel search API error:', err);
+    } finally {
+      setIsSearchingPipes(false);
+    }
+  };
 
   // Preset switch handler
   const handleApplyPreset = (preset) => {
     setActivePreset(preset);
-    if (preset === 'time') {
-      setSelectedInbound(0);
-      setSelectedInter(0);
-      setSelectedOutbound(0);
-      setSelectedTransfer(0);
-    } else if (preset === 'comfort') {
-      setSelectedInbound(Math.min(1, (inboundOptions.length - 1)));
-      setSelectedInter(Math.min(1, (interCityOptions.length - 1)));
-      setSelectedOutbound(Math.min(1, (outboundOptions.length - 1)));
-      setSelectedTransfer(Math.min(1, (transferOptions.length - 1)));
-    } else if (preset === 'price') {
-      setSelectedInbound(Math.min(2, (inboundOptions.length - 1)));
-      setSelectedInter(Math.min(2, (interCityOptions.length - 1)));
-      setSelectedOutbound(Math.min(2, (outboundOptions.length - 1)));
-      setSelectedTransfer(Math.min(2, (transferOptions.length - 1)));
+    const targetIdx = preset === 'time' ? 0 : preset === 'comfort' ? 1 : 2;
+    setSelectedInbound(Math.min(targetIdx, inboundOptions.length - 1));
+    setSelectedInter(Math.min(targetIdx, interCityOptions.length - 1));
+    setSelectedOutbound(Math.min(targetIdx, outboundOptions.length - 1));
+    setSelectedTransfer(Math.min(targetIdx, transferOptions.length - 1));
+
+    if (dynamicSegments.length > 0) {
+      const newSel = {};
+      dynamicSegments.forEach(seg => {
+        newSel[seg.segmentIndex] = Math.min(targetIdx, (seg.options?.length || 1) - 1);
+      });
+      setSelectedSegmentOptions(newSel);
     }
   };
 
   // Calculate live total cost
-  const safeInboundPrice = inboundOptions[selectedInbound]?.price || 850;
-  const safeInterPrice = stops.length > 1 && interCityOptions[selectedInter] ? interCityOptions[selectedInter].price : 0;
-  const safeOutboundPrice = outboundOptions[selectedOutbound]?.price || 800;
-  const safeTransferPrice = transferOptions[selectedTransfer]?.price || 25;
-  const totalCost = safeInboundPrice + safeInterPrice + safeOutboundPrice + safeTransferPrice;
-
+  let totalCost = 0;
+  if (dynamicSegments.length > 0) {
+    dynamicSegments.forEach(seg => {
+      const selOptIdx = selectedSegmentOptions[seg.segmentIndex] || 0;
+      totalCost += seg.options?.[selOptIdx]?.price || 0;
+    });
+    const safeTransferPrice = transferOptions[selectedTransfer]?.price || 25;
+    totalCost += safeTransferPrice;
+  } else {
+    const safeInboundPrice = inboundOptions[selectedInbound]?.price || 850;
+    const safeInterPrice = stops.length > 1 && interCityOptions[selectedInter] ? interCityOptions[selectedInter].price : 0;
+    const safeOutboundPrice = outboundOptions[selectedOutbound]?.price || 800;
+    const safeTransferPrice = transferOptions[selectedTransfer]?.price || 25;
+    totalCost = safeInboundPrice + safeInterPrice + safeOutboundPrice + safeTransferPrice;
+  }
 
   const handleConfirm = () => {
-    const bookedLegs = [
-      {
-        type: 'Inbound Flight',
-        from: departure,
-        to: firstStop,
-        provider: inboundOptions[selectedInbound].provider,
-        time: inboundOptions[selectedInbound].time,
-        class: inboundOptions[selectedInbound].type,
-        price: inboundOptions[selectedInbound].price
-      },
-      ...(stops.length > 1 ? [{
-        type: 'Inter-City Transit',
-        from: firstStop,
-        to: lastStop,
-        provider: interCityOptions[selectedInter].provider,
-        time: interCityOptions[selectedInter].time,
-        class: interCityOptions[selectedInter].type,
-        price: interCityOptions[selectedInter].price
-      }] : []),
-      {
-        type: 'Outbound Flight',
-        from: lastStop,
-        to: returnPlace,
-        provider: outboundOptions[selectedOutbound].provider,
-        time: outboundOptions[selectedOutbound].time,
-        class: outboundOptions[selectedOutbound].type,
-        price: outboundOptions[selectedOutbound].price
-      },
-      {
+    let bookedLegs = [];
+
+    if (dynamicSegments.length > 0) {
+      bookedLegs = dynamicSegments.map(seg => {
+        const selOptIdx = selectedSegmentOptions[seg.segmentIndex] || 0;
+        const opt = seg.options?.[selOptIdx] || {};
+        return {
+          type: `Segment ${seg.segmentIndex}: ${seg.isFlightLeg ? 'Flight' : 'Transit'}`,
+          from: seg.from,
+          to: seg.to,
+          provider: opt.provider,
+          time: opt.time,
+          class: opt.type,
+          price: opt.price
+        };
+      });
+      bookedLegs.push({
         type: 'Local Ground Transfer',
-        from: 'Airport',
+        from: 'Airport / Terminal',
         to: 'Hotel / Venue',
-        provider: transferOptions[selectedTransfer].provider,
-        time: transferOptions[selectedTransfer].time,
-        price: transferOptions[selectedTransfer].price
-      }
-    ];
+        provider: transferOptions[selectedTransfer]?.provider || 'Grab Executive',
+        time: transferOptions[selectedTransfer]?.time || '35m',
+        price: transferOptions[selectedTransfer]?.price || 25
+      });
+    } else {
+      bookedLegs = [
+        {
+          type: 'Inbound Flight',
+          from: departure,
+          to: firstStop,
+          provider: inboundOptions[selectedInbound].provider,
+          time: inboundOptions[selectedInbound].time,
+          class: inboundOptions[selectedInbound].type,
+          price: inboundOptions[selectedInbound].price
+        },
+        ...(stops.length > 1 ? [{
+          type: 'Inter-City Transit',
+          from: firstStop,
+          to: lastStop,
+          provider: interCityOptions[selectedInter].provider,
+          time: interCityOptions[selectedInter].time,
+          class: interCityOptions[selectedInter].type,
+          price: interCityOptions[selectedInter].price
+        }] : []),
+        {
+          type: 'Outbound Flight',
+          from: lastStop,
+          to: returnPlace,
+          provider: outboundOptions[selectedOutbound].provider,
+          time: outboundOptions[selectedOutbound].time,
+          class: outboundOptions[selectedOutbound].type,
+          price: outboundOptions[selectedOutbound].price
+        },
+        {
+          type: 'Local Ground Transfer',
+          from: 'Airport',
+          to: 'Hotel / Venue',
+          provider: transferOptions[selectedTransfer].provider,
+          time: transferOptions[selectedTransfer].time,
+          price: transferOptions[selectedTransfer].price
+        }
+      ];
+    }
 
     onNext({
       departure,
@@ -486,237 +522,407 @@ export const TravelOptimization = ({ onNext, itinerary = [] }) => {
               }}
             />
           </div>
-        </div>
-      </Card>
-
-      {/* Preset Strategy Buttons */}
-      <div className="flex gap-3 mb-2 flex-wrap">
-        <Button 
-          variant={activePreset === 'time' ? 'primary' : 'secondary'} 
-          onClick={() => handleApplyPreset('time')}
-        >
-          <Clock size={16}/> Optimise for Speed (Fastest)
-        </Button>
-        <Button 
-          variant={activePreset === 'comfort' ? 'primary' : 'secondary'} 
-          onClick={() => handleApplyPreset('comfort')}
-        >
-          <ShieldCheck size={16}/> Optimise for Comfort (Direct & Executive)
-        </Button>
-        <Button 
-          variant={activePreset === 'price' ? 'primary' : 'secondary'} 
-          onClick={() => handleApplyPreset('price')}
-        >
-          <Ticket size={16}/> Optimise for Price (Best Value)
-        </Button>
-      </div>
-
-      {/* Journey Segments Selection */}
-      <h3 className="mt-4 mb-2">Journey Segments ({stops.length > 1 ? 'Multi-Stop Trip' : 'Direct Journey'})</h3>
-      
-      <div className="flex-col gap-6">
-        {/* Segment 1: Inbound Flight */}
-        <div className="flex-col gap-2">
-          <h4 className="text-secondary mb-1" style={{ fontSize: '1rem', fontWeight: 600 }}>
-            Segment 1: Inbound Flight — {departure} ➔ {firstStop}
-          </h4>
-          {inboundOptions.map(option => (
-            <Card 
-              key={option.id} 
-              status={selectedInbound === option.id ? 'success' : 'standard'}
-              className="cursor-pointer transition-all hover-border-primary mb-2"
-              onClick={() => setSelectedInbound(option.id)}
-            >
-              <div className="flex justify-between items-center">
-                <div className="flex items-center gap-4">
-                  <Plane size={22} style={{ color: '#0284c7' }} />
-                  <div>
-                    <div className="font-semibold text-primary">{option.provider}</div>
-                    <div className="text-caption mt-0.5 flex items-center gap-2 flex-wrap" style={{ fontSize: '0.75rem' }}>
-                      <span>{option.type} &bull; {option.time}</span>
-                      {option.pipe && (
-                        <span style={{ fontSize: '0.68rem', fontWeight: 600, color: '#0284c7', background: '#e0f2fe', padding: '1px 6px', borderRadius: '4px' }}>
-                          {option.pipe}
-                        </span>
-                      )}
-                      {option.disruptionScore && (
-                        <span style={{ fontSize: '0.68rem', fontWeight: 500, color: '#059669', background: '#ecfdf5', padding: '1px 6px', borderRadius: '4px' }}>
-                          {option.disruptionScore}
-                        </span>
-                      )}
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-6">
-                  {option.tag === activePreset && <Badge status="live">Recommended for {activePreset}</Badge>}
-                  <div className="text-price">${option.price}</div>
-                  <div style={{
-                    width: '24px', height: '24px', borderRadius: '50%', flexShrink: 0,
-                    border: selectedInbound === option.id ? '2px solid #059669' : '2px solid #cbd5e1',
-                    background: selectedInbound === option.id ? '#059669' : 'transparent',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    transition: 'all 0.2s ease'
-                  }}>
-                    {selectedInbound === option.id && <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ffffff' }}></div>}
-                  </div>
-                </div>
-              </div>
-            </Card>
-          ))}
-        </div>
-
-        {/* Optional Segment: Inter-city transit for multi-stop */}
-        {stops.length > 1 && (
-          <div className="flex-col gap-2 mt-2">
-            <h4 className="text-secondary mb-1" style={{ fontSize: '1rem', fontWeight: 600 }}>
-              Segment 2: Inter-City Connection — {firstStop} ➔ {lastStop}
-            </h4>
-            {interCityOptions.map(option => (
-              <Card 
-                key={option.id} 
-                status={selectedInter === option.id ? 'success' : 'standard'}
-                className="cursor-pointer transition-all hover-border-primary mb-2"
-                onClick={() => setSelectedInter(option.id)}
-              >
-                <div className="flex justify-between items-center">
-                  <div className="flex items-center gap-4">
-                    <Train size={22} style={{ color: '#0284c7' }} />
-                    <div>
-                      <div className="font-semibold text-primary">{option.provider}</div>
-                      <div className="text-caption mt-0.5">{option.type} &bull; {option.time}</div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-6">
-                    {option.tag === activePreset && <Badge status="live">Recommended</Badge>}
-                    <div className="text-price">${option.price}</div>
-                    <div style={{
-                      width: '24px', height: '24px', borderRadius: '50%', flexShrink: 0,
-                      border: selectedInter === option.id ? '2px solid #059669' : '2px solid #cbd5e1',
-                      background: selectedInter === option.id ? '#059669' : 'transparent',
-                      display: 'flex', alignItems: 'center', justifyContent: 'center',
-                      transition: 'all 0.2s ease'
-                    }}>
-                      {selectedInter === option.id && <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ffffff' }}></div>}
-                    </div>
-                  </div>
-                </div>
-              </Card>
-            ))}
-          </div>
-        )}
-
-        {/* Outbound Return Flight */}
-        <div className="flex-col gap-2 mt-2">
-          <h4 className="text-secondary mb-1" style={{ fontSize: '1rem', fontWeight: 600 }}>
-            Segment {stops.length > 1 ? '3' : '2'}: Outbound Return Flight — {lastStop} ➔ {returnPlace}
-          </h4>
-          {outboundOptions.map(option => (
-            <Card 
-              key={option.id} 
-              status={selectedOutbound === option.id ? 'success' : 'standard'}
-              className="cursor-pointer transition-all hover-border-primary mb-2"
-              onClick={() => setSelectedOutbound(option.id)}
-            >
-              <div className="flex justify-between items-center">
-                <div className="flex items-center gap-4">
-                  <Plane size={22} style={{ color: '#0284c7', transform: 'rotate(180deg)' }} />
-                  <div>
-                    <div className="font-semibold text-primary">{option.provider}</div>
-                    <div className="text-caption mt-0.5">{option.type} &bull; {option.time}</div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-6">
-                  {option.tag === activePreset && <Badge status="live">Recommended</Badge>}
-                  <div className="text-price">${option.price}</div>
-                  <div style={{
-                    width: '24px', height: '24px', borderRadius: '50%', flexShrink: 0,
-                    border: selectedOutbound === option.id ? '2px solid #059669' : '2px solid #cbd5e1',
-                    background: selectedOutbound === option.id ? '#059669' : 'transparent',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    transition: 'all 0.2s ease'
-                  }}>
-                    {selectedOutbound === option.id && <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ffffff' }}></div>}
-                  </div>
-                </div>
-              </div>
-            </Card>
-          ))}
-        </div>
-
-        {/* Local Transfer */}
-        <div className="flex-col gap-2 mt-2">
-          <h4 className="text-secondary mb-1" style={{ fontSize: '1rem', fontWeight: 600 }}>
-            Segment {stops.length > 1 ? '4' : '3'}: Destination Airport &bull; Hotel Transfer ({firstStop})
-          </h4>
-          {transferOptions.map(option => (
-            <Card 
-              key={option.id} 
-              status={selectedTransfer === option.id ? 'success' : 'standard'}
-              className="cursor-pointer transition-all hover-border-primary mb-2"
-              onClick={() => setSelectedTransfer(option.id)}
-            >
-              <div className="flex justify-between items-center">
-                <div className="flex items-center gap-4">
-                  <Bus size={22} style={{ color: '#0284c7' }} />
-                  <div>
-                    <div className="font-semibold text-primary">{option.provider}</div>
-                    <div className="text-caption mt-0.5">{option.type} &bull; {option.time}</div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-6">
-                  {option.tag === activePreset && <Badge status="live">Recommended</Badge>}
-                  <div className="text-price">${option.price}</div>
-                  <div style={{
-                    width: '24px', height: '24px', borderRadius: '50%', flexShrink: 0,
-                    border: selectedTransfer === option.id ? '2px solid #059669' : '2px solid #cbd5e1',
-                    background: selectedTransfer === option.id ? '#059669' : 'transparent',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
-                    transition: 'all 0.2s ease'
-                  }}>
-                    {selectedTransfer === option.id && <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ffffff' }}></div>}
-                  </div>
-                </div>
-              </div>
-            </Card>
-          ))}
-        </div>
-
-        {/* Total Cost Summary Bar & Action */}
-        <div className="mt-6 flex justify-between items-center bg-[var(--color-surface)] p-6 rounded-xl border border-[var(--color-card-border)] flex-wrap gap-4">
-          <div>
-            <div className="text-caption font-semibold uppercase tracking-wider" style={{ color: '#0284c7' }}>Total Journey Package Cost</div>
-            <div className="text-price mt-1" style={{ fontSize: '1.75rem', color: '#0f172a' }}>
-              ${totalCost}
-            </div>
-            <div className="text-caption mt-0.5" style={{ fontSize: '0.8rem', color: '#64748b' }}>
-              Includes all flights, inter-city legs, and local ground transfers
-            </div>
-          </div>
-          
+        {/* Search CTA Button */}
+        <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid #f1f5f9', display: 'flex', justify: 'flex-end' }}>
           <button
             type="button"
-            onClick={handleConfirm}
+            onClick={handlePerformSearch}
+            disabled={isSearchingPipes}
             style={{
-              padding: '14px 28px',
+              width: '100%',
+              padding: '13px 24px',
               borderRadius: '8px',
               border: 'none',
               background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
               color: '#ffffff',
               fontWeight: 700,
-              fontSize: '1rem',
-              cursor: 'pointer',
+              fontSize: '0.95rem',
+              cursor: isSearchingPipes ? 'not-allowed' : 'pointer',
               display: 'flex',
               alignItems: 'center',
-              gap: '8px',
-              boxShadow: '0 4px 14px rgba(2, 132, 199, 0.35)',
+              justifyContent: 'center',
+              gap: '10px',
+              boxShadow: '0 4px 14px rgba(2, 132, 199, 0.3)',
               transition: 'all 0.2s ease'
             }}
           >
-            <CheckCircle2 size={18} />
-            <span>Confirm & Book Complete Journey</span>
+            {isSearchingPipes ? (
+              <>
+                <Loader2 size={18} className="animate-spin" />
+                <span>Searching Duffel, Kiwi, 12Go &amp; Grab APIs...</span>
+              </>
+            ) : (
+              <>
+                <Sparkles size={18} />
+                <span>Search Travel Options &amp; Calculate Live Prices</span>
+                <ArrowRight size={18} />
+              </>
+            )}
           </button>
         </div>
-      </div>
+      </Card>
+
+      {/* State 1: Prompt before search */}
+      {!hasSearched && !isSearchingPipes && (
+        <Card status="standard" className="text-center py-12" style={{ border: '2px dashed #cbd5e1', background: '#ffffff', borderRadius: '12px' }}>
+          <div style={{ maxWidth: '480px', margin: '0 auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+            <div style={{ width: '48px', height: '48px', borderRadius: '50%', background: '#e0f2fe', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0284c7' }}>
+              <Plane size={24} />
+            </div>
+            <h3 style={{ margin: 0, fontSize: '1.2rem', color: '#0f172a' }}>Ready to Search Travel Options?</h3>
+            <p style={{ margin: 0, fontSize: '0.875rem', color: '#64748b', lineHeight: '1.5' }}>
+              Click <strong>"Search Travel Options &amp; Calculate Live Prices"</strong> above to query live carrier rates, high-speed rail connections, and Grab transfers for your route.
+            </p>
+          </div>
+        </Card>
+      )}
+
+      {/* State 2: Searching Spinner */}
+      {isSearchingPipes && (
+        <Card status="standard" className="text-center py-12" style={{ background: '#ffffff', borderRadius: '12px', border: '1px solid #bae6fd' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '14px' }}>
+            <Loader2 size={36} style={{ color: '#0284c7' }} className="animate-spin" />
+            <h3 style={{ margin: 0, fontSize: '1.15rem', color: '#0f172a' }}>Calculating Real-Time Fares &amp; Routes...</h3>
+            <p style={{ margin: 0, fontSize: '0.85rem', color: '#64748b' }}>
+              Fetching flight offers from Duffel API, price trends from Travelpayouts, inter-city legs via 12Go, and Grab transfers.
+            </p>
+          </div>
+        </Card>
+      )}
+
+      {/* State 3: Search Results Rendered */}
+      {hasSearched && !isSearchingPipes && (
+        <>
+          {/* Active API Pipes Indicator Banner */}
+          <div style={{ background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '10px', padding: '12px 16px', marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Sparkles size={16} style={{ color: '#0284c7' }} />
+              <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#0f172a' }}>Live Search Processed — Actual Prices Calculated</span>
+            </div>
+            <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+              <span style={{ fontSize: '0.68rem', fontWeight: 700, background: '#e0f2fe', color: '#0369a1', padding: '2px 8px', borderRadius: '12px' }}>Duffel API</span>
+              <span style={{ fontSize: '0.68rem', fontWeight: 700, background: '#fef3c7', color: '#b45309', padding: '2px 8px', borderRadius: '12px' }}>Kiwi Tequila</span>
+              <span style={{ fontSize: '0.68rem', fontWeight: 700, background: '#ecfdf5', color: '#047857', padding: '2px 8px', borderRadius: '12px' }}>12Go Transit</span>
+              <span style={{ fontSize: '0.68rem', fontWeight: 700, background: '#f3e8ff', color: '#6b21a8', padding: '2px 8px', borderRadius: '12px' }}>Grab Charter</span>
+            </div>
+          </div>
+
+          {/* Preset Strategy Buttons */}
+          <div className="flex gap-3 mb-2 flex-wrap">
+            <Button 
+              variant={activePreset === 'time' ? 'primary' : 'secondary'} 
+              onClick={() => handleApplyPreset('time')}
+            >
+              <Clock size={16}/> Optimise for Speed (Fastest)
+            </Button>
+            <Button 
+              variant={activePreset === 'comfort' ? 'primary' : 'secondary'} 
+              onClick={() => handleApplyPreset('comfort')}
+            >
+              <ShieldCheck size={16}/> Optimise for Comfort (Direct &amp; Executive)
+            </Button>
+            <Button 
+              variant={activePreset === 'price' ? 'primary' : 'secondary'} 
+              onClick={() => handleApplyPreset('price')}
+            >
+              <Ticket size={16}/> Optimise for Price (Best Value)
+            </Button>
+          </div>
+
+          {/* Dynamic Per-Segment Options if Multi-Stop Itinerary */}
+          {dynamicSegments.length > 0 ? (
+            <div className="flex-col gap-6 mt-4">
+              <h3 className="mb-2">Segment Options ({dynamicSegments.length} Route Legs)</h3>
+              
+              {dynamicSegments.map((seg) => {
+                const selectedOptIdx = selectedSegmentOptions[seg.segmentIndex] || 0;
+                return (
+                  <div key={seg.segmentIndex} className="flex-col gap-2">
+                    <h4 className="text-secondary mb-1" style={{ fontSize: '1rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <span style={{ width: '22px', height: '22px', borderRadius: '50%', background: '#0284c7', color: '#fff', fontSize: '11px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                        {seg.segmentIndex}
+                      </span>
+                      {seg.title}
+                    </h4>
+
+                    {seg.options.map((option) => (
+                      <Card
+                        key={option.id}
+                        status={selectedOptIdx === option.id ? 'success' : 'standard'}
+                        className="cursor-pointer transition-all hover-border-primary mb-2"
+                        onClick={() => setSelectedSegmentOptions(prev => ({ ...prev, [seg.segmentIndex]: option.id }))}
+                      >
+                        <div className="flex justify-between items-center">
+                          <div className="flex items-center gap-4">
+                            {seg.isFlightLeg ? <Plane size={22} style={{ color: '#0284c7' }} /> : <Train size={22} style={{ color: '#0284c7' }} />}
+                            <div>
+                              <div className="font-semibold text-primary">{option.provider}</div>
+                              <div className="text-caption mt-0.5 flex items-center gap-2 flex-wrap" style={{ fontSize: '0.75rem' }}>
+                                <span>{option.type} &bull; {option.time}</span>
+                                {option.pipe && (
+                                  <span style={{ fontSize: '0.68rem', fontWeight: 600, color: '#0284c7', background: '#e0f2fe', padding: '1px 6px', borderRadius: '4px' }}>
+                                    {option.pipe}
+                                  </span>
+                                )}
+                                {option.disruptionScore && (
+                                  <span style={{ fontSize: '0.68rem', fontWeight: 500, color: '#059669', background: '#ecfdf5', padding: '1px 6px', borderRadius: '4px' }}>
+                                    {option.disruptionScore}
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-6">
+                            {option.tag === activePreset && <Badge status="live">Recommended</Badge>}
+                            <div className="text-price" style={{ color: '#0f172a', fontWeight: 700 }}>${option.price}</div>
+                            <div style={{
+                              width: '24px', height: '24px', borderRadius: '50%', flexShrink: 0,
+                              border: selectedOptIdx === option.id ? '2px solid #059669' : '2px solid #cbd5e1',
+                              background: selectedOptIdx === option.id ? '#059669' : 'transparent',
+                              display: 'flex', alignItems: 'center', justifyContent: 'center',
+                              transition: 'all 0.2s ease'
+                            }}>
+                              {selectedOptIdx === option.id && <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ffffff' }}></div>}
+                            </div>
+                          </div>
+                        </div>
+                      </Card>
+                    ))}
+                  </div>
+                );
+              })}
+
+              {/* Local Ground Transfer Segment */}
+              <div className="flex-col gap-2 mt-2">
+                <h4 className="text-secondary mb-1" style={{ fontSize: '1rem', fontWeight: 600 }}>
+                  Segment {dynamicSegments.length + 1}: Local Destination Ground Transfer ({firstStop})
+                </h4>
+                {transferOptions.map(option => (
+                  <Card 
+                    key={option.id} 
+                    status={selectedTransfer === option.id ? 'success' : 'standard'}
+                    className="cursor-pointer transition-all hover-border-primary mb-2"
+                    onClick={() => setSelectedTransfer(option.id)}
+                  >
+                    <div className="flex justify-between items-center">
+                      <div className="flex items-center gap-4">
+                        <Bus size={22} style={{ color: '#0284c7' }} />
+                        <div>
+                          <div className="font-semibold text-primary">{option.provider}</div>
+                          <div className="text-caption mt-0.5 flex items-center gap-2" style={{ fontSize: '0.75rem' }}>
+                            <span>{option.type} &bull; {option.time}</span>
+                            {option.pipe && (
+                              <span style={{ fontSize: '0.68rem', fontWeight: 600, color: '#0284c7', background: '#e0f2fe', padding: '1px 6px', borderRadius: '4px' }}>
+                                {option.pipe}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-6">
+                        {option.tag === activePreset && <Badge status="live">Recommended</Badge>}
+                        <div className="text-price">${option.price}</div>
+                        <div style={{
+                          width: '24px', height: '24px', borderRadius: '50%', flexShrink: 0,
+                          border: selectedTransfer === option.id ? '2px solid #059669' : '2px solid #cbd5e1',
+                          background: selectedTransfer === option.id ? '#059669' : 'transparent',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          transition: 'all 0.2s ease'
+                        }}>
+                          {selectedTransfer === option.id && <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ffffff' }}></div>}
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          ) : (
+            /* Standard Simple Roundtrip View */
+            <div className="flex-col gap-6 mt-4">
+              <h3 className="mb-2">Journey Segments (Direct Journey)</h3>
+
+              {/* Segment 1: Inbound Flight */}
+              <div className="flex-col gap-2">
+                <h4 className="text-secondary mb-1" style={{ fontSize: '1rem', fontWeight: 600 }}>
+                  Segment 1: Inbound Flight — {departure} ➔ {firstStop}
+                </h4>
+                {inboundOptions.map(option => (
+                  <Card 
+                    key={option.id} 
+                    status={selectedInbound === option.id ? 'success' : 'standard'}
+                    className="cursor-pointer transition-all hover-border-primary mb-2"
+                    onClick={() => setSelectedInbound(option.id)}
+                  >
+                    <div className="flex justify-between items-center">
+                      <div className="flex items-center gap-4">
+                        <Plane size={22} style={{ color: '#0284c7' }} />
+                        <div>
+                          <div className="font-semibold text-primary">{option.provider}</div>
+                          <div className="text-caption mt-0.5 flex items-center gap-2 flex-wrap" style={{ fontSize: '0.75rem' }}>
+                            <span>{option.type} &bull; {option.time}</span>
+                            {option.pipe && (
+                              <span style={{ fontSize: '0.68rem', fontWeight: 600, color: '#0284c7', background: '#e0f2fe', padding: '1px 6px', borderRadius: '4px' }}>
+                                {option.pipe}
+                              </span>
+                            )}
+                            {option.disruptionScore && (
+                              <span style={{ fontSize: '0.68rem', fontWeight: 500, color: '#059669', background: '#ecfdf5', padding: '1px 6px', borderRadius: '4px' }}>
+                                {option.disruptionScore}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-6">
+                        {option.tag === activePreset && <Badge status="live">Recommended</Badge>}
+                        <div className="text-price">${option.price}</div>
+                        <div style={{
+                          width: '24px', height: '24px', borderRadius: '50%', flexShrink: 0,
+                          border: selectedInbound === option.id ? '2px solid #059669' : '2px solid #cbd5e1',
+                          background: selectedInbound === option.id ? '#059669' : 'transparent',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          transition: 'all 0.2s ease'
+                        }}>
+                          {selectedInbound === option.id && <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ffffff' }}></div>}
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+
+              {/* Outbound Return Flight */}
+              <div className="flex-col gap-2 mt-2">
+                <h4 className="text-secondary mb-1" style={{ fontSize: '1rem', fontWeight: 600 }}>
+                  Segment 2: Outbound Return Flight — {lastStop} ➔ {returnPlace}
+                </h4>
+                {outboundOptions.map(option => (
+                  <Card 
+                    key={option.id} 
+                    status={selectedOutbound === option.id ? 'success' : 'standard'}
+                    className="cursor-pointer transition-all hover-border-primary mb-2"
+                    onClick={() => setSelectedOutbound(option.id)}
+                  >
+                    <div className="flex justify-between items-center">
+                      <div className="flex items-center gap-4">
+                        <Plane size={22} style={{ color: '#0284c7', transform: 'rotate(180deg)' }} />
+                        <div>
+                          <div className="font-semibold text-primary">{option.provider}</div>
+                          <div className="text-caption mt-0.5 flex items-center gap-2" style={{ fontSize: '0.75rem' }}>
+                            <span>{option.type} &bull; {option.time}</span>
+                            {option.pipe && (
+                              <span style={{ fontSize: '0.68rem', fontWeight: 600, color: '#0284c7', background: '#e0f2fe', padding: '1px 6px', borderRadius: '4px' }}>
+                                {option.pipe}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-6">
+                        {option.tag === activePreset && <Badge status="live">Recommended</Badge>}
+                        <div className="text-price">${option.price}</div>
+                        <div style={{
+                          width: '24px', height: '24px', borderRadius: '50%', flexShrink: 0,
+                          border: selectedOutbound === option.id ? '2px solid #059669' : '2px solid #cbd5e1',
+                          background: selectedOutbound === option.id ? '#059669' : 'transparent',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          transition: 'all 0.2s ease'
+                        }}>
+                          {selectedOutbound === option.id && <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ffffff' }}></div>}
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+
+              {/* Local Transfer */}
+              <div className="flex-col gap-2 mt-2">
+                <h4 className="text-secondary mb-1" style={{ fontSize: '1rem', fontWeight: 600 }}>
+                  Segment 3: Local Ground Transfer ({firstStop})
+                </h4>
+                {transferOptions.map(option => (
+                  <Card 
+                    key={option.id} 
+                    status={selectedTransfer === option.id ? 'success' : 'standard'}
+                    className="cursor-pointer transition-all hover-border-primary mb-2"
+                    onClick={() => setSelectedTransfer(option.id)}
+                  >
+                    <div className="flex justify-between items-center">
+                      <div className="flex items-center gap-4">
+                        <Bus size={22} style={{ color: '#0284c7' }} />
+                        <div>
+                          <div className="font-semibold text-primary">{option.provider}</div>
+                          <div className="text-caption mt-0.5 flex items-center gap-2" style={{ fontSize: '0.75rem' }}>
+                            <span>{option.type} &bull; {option.time}</span>
+                            {option.pipe && (
+                              <span style={{ fontSize: '0.68rem', fontWeight: 600, color: '#0284c7', background: '#e0f2fe', padding: '1px 6px', borderRadius: '4px' }}>
+                                {option.pipe}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-6">
+                        {option.tag === activePreset && <Badge status="live">Recommended</Badge>}
+                        <div className="text-price">${option.price}</div>
+                        <div style={{
+                          width: '24px', height: '24px', borderRadius: '50%', flexShrink: 0,
+                          border: selectedTransfer === option.id ? '2px solid #059669' : '2px solid #cbd5e1',
+                          background: selectedTransfer === option.id ? '#059669' : 'transparent',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          transition: 'all 0.2s ease'
+                        }}>
+                          {selectedTransfer === option.id && <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ffffff' }}></div>}
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Total Cost Summary Bar & Action */}
+          <div className="mt-6 flex justify-between items-center bg-[var(--color-surface)] p-6 rounded-xl border border-[var(--color-card-border)] flex-wrap gap-4">
+            <div>
+              <div className="text-caption font-semibold uppercase tracking-wider" style={{ color: '#0284c7' }}>Total Journey Package Cost</div>
+              <div className="text-price mt-1" style={{ fontSize: '1.75rem', color: '#0f172a' }}>
+                ${totalCost}
+              </div>
+              <div className="text-caption mt-0.5" style={{ fontSize: '0.8rem', color: '#64748b' }}>
+                Includes all confirmed segment options &amp; local transfers
+              </div>
+            </div>
+            
+            <button
+              type="button"
+              onClick={handleConfirm}
+              style={{
+                padding: '14px 28px',
+                borderRadius: '8px',
+                border: 'none',
+                background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+                color: '#ffffff',
+                fontWeight: 700,
+                fontSize: '1rem',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                boxShadow: '0 4px 14px rgba(2, 132, 199, 0.35)',
+                transition: 'all 0.2s ease'
+              }}
+            >
+              <CheckCircle2 size={18} />
+              <span>Confirm &amp; Book Complete Journey</span>
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 };
+
