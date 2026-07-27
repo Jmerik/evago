@@ -11,6 +11,24 @@ function buildDateTimeIso(dateStr, timeStr) {
   return `${dateStr}T${safeTime}:00`;
 }
 
+/**
+ * Enumerate YYYY-MM-DD strings between two dates (inclusive).
+ * Returns [] if from is after to or either is missing.
+ */
+function enumerateDateRange(fromIso, toIso) {
+  if (!fromIso || !toIso) return [];
+  const dates = [];
+  const current = new Date(`${fromIso}T00:00:00`);
+  const end = new Date(`${toIso}T00:00:00`);
+  if (isNaN(current) || isNaN(end) || current > end) return [];
+  while (current <= end) {
+    const iso = current.toISOString().slice(0, 10);
+    dates.push(iso);
+    current.setDate(current.getDate() + 1);
+  }
+  return dates;
+}
+
 export const TravelOptimization = ({ onNext, itinerary = [] }) => {
   const [activePreset, setActivePreset] = useState('time'); // 'time', 'comfort', 'price'
   const [departure, setDeparture] = useState('London Heathrow (LHR)');
@@ -21,6 +39,9 @@ export const TravelOptimization = ({ onNext, itinerary = [] }) => {
   const [searchError, setSearchError] = useState('');
   // Per-stop date/time overrides keyed by city (used only for stops that have no event datetime)
   const [stopOverrides, setStopOverrides] = useState({});
+  // Per-leg depart-date override keyed by segmentIndex (1-based).
+  // Each entry: { date: 'YYYY-MM-DD' }.
+  const [legDateOverrides, setLegDateOverrides] = useState({});
 
   // Build ordered list of stops with their arrival deadlines from itinerary events.
   const stopsWithDates = (() => {
@@ -51,6 +72,35 @@ export const TravelOptimization = ({ onNext, itinerary = [] }) => {
   const stops = stopsWithDates.map((s) => s.city);
   const needsAnyDate = stopsWithDates.some((s) => s.needsDate) || !startDate || !endDate || false;
   const destinationsList = stops.join(' ➔ ');
+
+  /**
+   * For each leg, compute the range of valid departure dates:
+   *   min = prev stop date / user-selected startDate (leg 1)
+   *   max = next stop arriveBy date (its calendar day)
+   * Plus whether the user must pick (range > 1 day).
+   */
+  const legDateRanges = (() => {
+    const ranges = [];
+    let prevDate = startDate || null;
+    for (let i = 0; i < stopsWithDates.length; i++) {
+      const stop = stopsWithDates[i];
+      const arriveByIso = !stop.needsDate
+        ? stop.arriveBy
+        : buildDateTimeIso(stopOverrides[stop.city]?.date, stopOverrides[stop.city]?.time || '12:00');
+      const arrivalDate = arriveByIso ? arriveByIso.slice(0, 10) : null;
+      const options = prevDate && arrivalDate ? enumerateDateRange(prevDate, arrivalDate) : [];
+      ranges.push({
+        segmentIndex: i + 1,
+        from: prevDate,
+        to: arrivalDate,
+        options,
+        choices: options.length > 1,
+        defaultDate: options.length > 0 ? options[options.length - 1] : (prevDate || ''),
+      });
+      if (arrivalDate) prevDate = arrivalDate;
+    }
+    return ranges;
+  })();
 
   // Autocomplete state for departure
   const [depSuggestions, setDepSuggestions] = useState([]);
@@ -165,26 +215,32 @@ export const TravelOptimization = ({ onNext, itinerary = [] }) => {
     setHasSearched(true);
     setIsSearchingPipes(true);
     try {
-      // Build segments with per-leg departDate and arriveBy
+      // Build segments with per-leg departDate and arriveBy.
+      // Per-leg depart date is the user-chosen value within the
+      // [prev stop date, next stop arriveBy] range. Defaults to the
+      // latest safe date so arrivals stay just-in-time.
       const segments = [];
       let prevStopDate = startDate;
       for (let i = 0; i < stopsWithDates.length; i++) {
         const stop = stopsWithDates[i];
         const arrivalIso = !stop.needsDate
           ? stop.arriveBy
-          : buildDateTimeIso(stopOverrides[stop.city].date, stopOverrides[stop.city].time || '09:00');
+          : buildDateTimeIso(stopOverrides[stop.city].date, stopOverrides[stop.city].time || '12:00');
 
         const from = i === 0 ? departure : stopsWithDates[i - 1].city;
         const to = stop.city;
 
+        const range = legDateRanges[i];
+        const chosenDep = (legDateOverrides[i + 1]?.date) || range?.defaultDate || prevStopDate;
+
         segments.push({
           from,
           to,
-          departDate: prevStopDate,
+          departDate: chosenDep,
           arriveBy: arrivalIso,
         });
 
-        // Next leg departs on this stop's date
+        // Next leg's earliest depart date is this stop's date
         prevStopDate = arrivalIso ? arrivalIso.slice(0, 10) : prevStopDate;
       }
 
@@ -785,6 +841,82 @@ export const TravelOptimization = ({ onNext, itinerary = [] }) => {
           </div>
         )}
 
+        {/* Row 4: Per-Leg Travel-Date Picker (only when a leg has a choice of depart dates) */}
+        {startDate && legDateRanges.some((r) => r.options.length > 0) && (
+          <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid #f1f5f9' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+              <Calendar size={14} style={{ color: '#0284c7' }} />
+              <h4 style={{ margin: 0, fontSize: '0.85rem', color: '#0f172a' }}>
+                Per-Leg Travel Dates
+              </h4>
+              <span style={{ fontSize: '0.72rem', color: '#64748b', fontStyle: 'italic' }}>
+                Pick the depart date for each leg between the previous stop's deadline and the next stop's deadline.
+              </span>
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '12px' }}>
+              {legDateRanges.map((range) => {
+                if (range.options.length === 0) return null;
+                const current = legDateOverrides[range.segmentIndex]?.date || range.defaultDate;
+                return (
+                  <div
+                    key={range.segmentIndex}
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '6px',
+                      padding: '10px 12px',
+                      border: '1px solid #cbd5e1',
+                      borderRadius: '8px',
+                      background: '#ffffff',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <span style={{ fontSize: '0.7rem', fontWeight: 700, color: '#0f172a', textTransform: 'uppercase' }}>
+                        Leg {range.segmentIndex} depart date
+                      </span>
+                      {range.choices && (
+                        <span style={{
+                          fontSize: '0.65rem', fontWeight: 600,
+                          background: '#e0f2fe', color: '#0369a1',
+                          padding: '2px 6px', borderRadius: '8px',
+                        }}>
+                          {range.options.length} choices
+                        </span>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                      <Calendar size={14} style={{ color: '#0284c7' }} />
+                      <input
+                        type="date"
+                        min={range.from || undefined}
+                        max={range.to || undefined}
+                        value={current}
+                        onChange={(e) => setLegDateOverrides((prev) => ({
+                          ...prev,
+                          [range.segmentIndex]: { date: e.target.value },
+                        }))}
+                        style={{
+                          flex: 1,
+                          padding: '8px 10px',
+                          border: '1px solid #cbd5e1',
+                          borderRadius: '6px',
+                          fontSize: '0.85rem',
+                          fontWeight: 600,
+                          boxSizing: 'border-box',
+                          cursor: 'pointer',
+                        }}
+                      />
+                    </div>
+                    <span style={{ fontSize: '0.68rem', color: '#64748b' }}>
+                      Range: <strong>{range.from}</strong> → <strong>{range.to}</strong>
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Validation error banner */}
         {searchError && (
           <div style={{ marginTop: '16px', padding: '12px 16px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: '8px', color: '#b91c1c', fontSize: '0.85rem', fontWeight: 600 }}>
@@ -920,6 +1052,9 @@ export const TravelOptimization = ({ onNext, itinerary = [] }) => {
               
               {dynamicSegments.map((seg) => {
                 const selectedOptIdx = selectedSegmentOptions[seg.segmentIndex] || 0;
+                const range = legDateRanges[seg.segmentIndex - 1];
+                const chosenDate = legDateOverrides[seg.segmentIndex]?.date || seg.departDate;
+                const hasChoice = range && range.choices;
                 return (
                   <div key={seg.segmentIndex} className="flex-col gap-2">
                     <h4 className="text-secondary mb-1" style={{ fontSize: '1rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
@@ -927,9 +1062,49 @@ export const TravelOptimization = ({ onNext, itinerary = [] }) => {
                         {seg.segmentIndex}
                       </span>
                       {seg.title}
-                      {seg.departDate && (
-                        <span style={{ fontSize: '0.7rem', fontWeight: 600, color: '#0369a1', background: '#e0f2fe', padding: '2px 8px', borderRadius: '10px' }}>
-                          Depart {seg.departDate}
+                      {chosenDate && (
+                        <span
+                          style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            fontSize: '0.72rem',
+                            fontWeight: 600,
+                            color: '#0369a1',
+                            background: '#e0f2fe',
+                            padding: '3px 8px',
+                            borderRadius: '10px',
+                          }}
+                          title={hasChoice
+                            ? `Pick a depart date between ${range.from} and ${range.to}`
+                            : 'Depart date (locked, only one valid choice)'}
+                        >
+                          <Calendar size={12} />
+                          <span>Depart {chosenDate}</span>
+                          {hasChoice && (
+                            <select
+                              aria-label="Choose depart date for this leg"
+                              value={chosenDate}
+                              onChange={(e) => setLegDateOverrides((prev) => ({
+                                ...prev,
+                                [seg.segmentIndex]: { date: e.target.value },
+                              }))}
+                              style={{
+                                border: 'none',
+                                background: 'transparent',
+                                color: '#0369a1',
+                                fontWeight: 700,
+                                fontSize: '0.72rem',
+                                cursor: 'pointer',
+                                padding: 0,
+                                outline: 'none',
+                              }}
+                            >
+                              {range.options.map((d) => (
+                                <option key={d} value={d}>{d}</option>
+                              ))}
+                            </select>
+                          )}
                         </span>
                       )}
                       {seg.arriveBy && (
@@ -938,6 +1113,11 @@ export const TravelOptimization = ({ onNext, itinerary = [] }) => {
                         </span>
                       )}
                     </h4>
+                    {hasChoice && (
+                      <div style={{ fontSize: '0.7rem', color: '#64748b', marginLeft: '36px' }}>
+                        Pick the depart date for this leg. Range: <strong>{range.from}</strong> → <strong>{range.to}</strong> (must arrive by the deadline for the next stop).
+                      </div>
+                    )}
 
                     {seg.options.map((option) => (
                       <Card
