@@ -42,6 +42,13 @@ export const EventDiscovery = ({ onNext }) => {
   const [destHighlight, setDestHighlight] = useState(-1);
   const [destRect, setDestRect] = useState({ top: 0, left: 0, width: 0 });
   const destDebounceRef = useRef(null);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (destDebounceRef.current) clearTimeout(destDebounceRef.current);
+    };
+  }, []);
   const destInputRef = useRef(null);
   const destDropdownRef = useRef(null);
 
@@ -979,12 +986,6 @@ export const EventDiscovery = ({ onNext }) => {
         </div>
       )}
 
-      <style dangerouslySetInnerHTML={{__html: `
-        @keyframes spin {
-          from { transform: rotate(0deg); }
-          to { transform: rotate(360deg); }
-        }
-      `}} />
     </div>
   );
 };

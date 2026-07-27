@@ -203,3 +203,8 @@ h3 {
 .card.cursor-pointer:hover { box-shadow: 0 4px 16px rgba(2, 132, 199, 0.1); transform: translateY(-1px); }
 .card.cursor-pointer:active { transform: translateY(0); }
 
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}

@@ -5,7 +5,11 @@ const cors = require('cors');
 const axios = require('axios');
 
 const app = express();
-app.use(cors());
+const corsOptions = {
+  origin: process.env.VERCEL ? ['https://evago-liard.vercel.app', 'https://evago.vercel.app'] : '*',
+  optionsSuccessStatus: 200
+};
+app.use(cors(corsOptions));
 app.use(express.json());
 
 // ─── DATA STORE ───────────────────────────────────────────────
@@ -309,7 +313,8 @@ app.post('/api/travel/search', async (req, res) => {
   const lastIata = extractIata(lastDest);
   const returnIata = extractIata(returnPlace);
 
-  const duffelToken = process.env.DUFFEL_API_KEY || (req.body?.duffelToken || ['duffel', 'test', 'HeM4wZmf1K4eFSYMngcq5PZz5FMopD_JwUM7BrNAJJ0'].join('_'));
+  // Prefer process.env, but allow body token for local development (no hardcoded fallback)
+  const duffelToken = process.env.DUFFEL_API_KEY || req.body?.duffelToken;
 
   const parseDuffelDuration = (isoDuration) => {
     if (!isoDuration) return 'Direct';

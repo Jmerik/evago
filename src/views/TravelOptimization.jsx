@@ -29,6 +29,14 @@ export const TravelOptimization = ({ onNext, itinerary = [] }) => {
   const [retDropdownOpen, setRetDropdownOpen] = useState(false);
   const retDebounceRef = useRef(null);
 
+  // Cleanup timeouts on unmount to prevent memory leaks
+  useEffect(() => {
+    return () => {
+      if (depDebounceRef.current) clearTimeout(depDebounceRef.current);
+      if (retDebounceRef.current) clearTimeout(retDebounceRef.current);
+    };
+  }, []);
+
   const fetchDepSuggestions = (query) => {
     if (depDebounceRef.current) clearTimeout(depDebounceRef.current);
     if (!query || query.length < 2) {
@@ -94,6 +102,7 @@ export const TravelOptimization = ({ onNext, itinerary = [] }) => {
   const [selectedInter, setSelectedInter] = useState(0);
   const [selectedOutbound, setSelectedOutbound] = useState(0);
   const [selectedTransfer, setSelectedTransfer] = useState(0);
+  const [apiPipesUsed, setApiPipesUsed] = useState([]);
 
   // Trigger search on explicit user action or initial search button click
   const handlePerformSearch = async () => {
