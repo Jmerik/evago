@@ -363,11 +363,20 @@ app.post('/api/travel/search', async (req, res) => {
     }
   };
 
+  const ensureIsoDate = (dateStr) => {
+    if (!dateStr) return new Date(Date.now() + 86400000 * 21).toISOString().split('T')[0];
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return dateStr;
+    try {
+      const d = new Date(dateStr);
+      if (!isNaN(d.getTime())) return d.toISOString().split('T')[0];
+    } catch {}
+    return new Date(Date.now() + 86400000 * 21).toISOString().split('T')[0];
+  };
+
   const fetchDuffelOffers = async (origin, destination, depDate) => {
     if (!duffelToken) return [];
     try {
-      const defaultDate = new Date(Date.now() + 86400000 * 21).toISOString().split('T')[0];
-      const targetDate = depDate || defaultDate;
+      const targetDate = ensureIsoDate(depDate);
       const duffelRes = await axios.post('https://api.duffel.com/air/offer_requests', {
         data: {
           slices: [
