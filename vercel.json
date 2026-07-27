@@ -1,0 +1,13 @@
+{
+  "version": 2,
+  "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "/evago-backend/api/index.ts"
+    },
+    {
+      "source": "/:path*",
+      "destination": "/evago-wireframes/:path*"
+    }
+  ]
+}

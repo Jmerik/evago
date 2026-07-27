@@ -1,4 +1,6 @@
-const API_BASE_URL = 'http://localhost:3001/api';
+const API_BASE_URL = typeof window !== 'undefined' && window.location.origin.includes('localhost')
+  ? 'http://localhost:3001/api'
+  : '/api';
 
 export const evagoApi = {
   /**

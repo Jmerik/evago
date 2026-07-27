@@ -18,6 +18,10 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok' });
 });
 
-app.listen(PORT, () => {
-  console.log(`EVAGO backend server listening on port ${PORT}`);
-});
+if (process.env.VERCEL !== '1') {
+  app.listen(PORT, () => {
+    console.log(`EVAGO backend server listening on port ${PORT}`);
+  });
+}
+
+export default app;
