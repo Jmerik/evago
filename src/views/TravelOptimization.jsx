@@ -219,16 +219,22 @@ export const TravelOptimization = ({ onNext, itinerary = [] }) => {
 
       {/* Trip Details & Travel Dates */}
       <Card status="standard" className="mb-6" style={{ borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 16px rgba(15, 23, 42, 0.04)' }}>
-        <h3 className="mb-1" style={{ fontSize: '1.2rem', color: '#0f172a' }}>Trip Locations & Travel Dates</h3>
-        <p style={{ fontSize: '0.875rem', color: '#64748b', marginBottom: '20px' }}>
-          Select or type your origin and return hubs, and choose your travel dates.
-        </p>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '10px', marginBottom: '20px' }}>
+          <div style={{ width: '36px', height: '36px', borderRadius: '8px', background: 'linear-gradient(135deg, #e0f2fe, #bae6fd)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <MapPin size={18} style={{ color: '#0284c7' }} />
+          </div>
+          <div>
+            <h3 style={{ margin: 0, fontSize: '1.1rem', color: '#0f172a' }}>Trip Locations &amp; Dates</h3>
+            <p style={{ margin: 0, fontSize: '0.8rem', color: '#64748b' }}>Set your origin hub, return hub and travel window</p>
+          </div>
+        </div>
 
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px' }}>
+        {/* Row 1: Departure + Return side by side */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px', marginBottom: '20px' }}>
           {/* Departure Input */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', position: 'relative' }}>
-            <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              Departure Location *
+            <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              ✈️ Departure Location *
             </label>
             <div style={{ position: 'relative' }}>
               <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#0284c7', display: 'flex', pointerEvents: 'none' }}>
@@ -254,14 +260,14 @@ export const TravelOptimization = ({ onNext, itinerary = [] }) => {
                   background: '#ffffff',
                   boxSizing: 'border-box'
                 }}
-                placeholder="e.g. London Heathrow (LHR)"
+                placeholder="e.g. London Heathrow (LHR) or KTI"
               />
               {depLoading && <Loader2 size={15} className="animate-spin" style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: '#0284c7' }} />}
             </div>
 
             {/* Quick Location Pills for Departure */}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '4px' }}>
-              {['London (LHR)', 'Frankfurt (FRA)', 'Singapore (SIN)', 'New York (JFK)', 'Tokyo (HND)'].map(hub => (
+              {['London (LHR)', 'Frankfurt (FRA)', 'Singapore (SIN)', 'Phnom Penh (KTI)', 'Tokyo (HND)'].map(hub => (
                 <button
                   key={hub}
                   type="button"
@@ -310,8 +316,8 @@ export const TravelOptimization = ({ onNext, itinerary = [] }) => {
 
           {/* Return Input */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', position: 'relative' }}>
-            <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              Return Location *
+            <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              🏠 Return Location *
             </label>
             <div style={{ position: 'relative' }}>
               <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#0284c7', display: 'flex', pointerEvents: 'none' }}>
@@ -337,14 +343,14 @@ export const TravelOptimization = ({ onNext, itinerary = [] }) => {
                   background: '#ffffff',
                   boxSizing: 'border-box'
                 }}
-                placeholder="e.g. London Heathrow (LHR)"
+                placeholder="e.g. London Heathrow (LHR) or KTI"
               />
               {retLoading && <Loader2 size={15} className="animate-spin" style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: '#0284c7' }} />}
             </div>
 
             {/* Quick Location Pills for Return */}
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '4px' }}>
-              {['London (LHR)', 'Frankfurt (FRA)', 'Singapore (SIN)', 'New York (JFK)', 'Tokyo (HND)'].map(hub => (
+              {['London (LHR)', 'Frankfurt (FRA)', 'Singapore (SIN)', 'Phnom Penh (KTI)', 'Tokyo (HND)'].map(hub => (
                 <button
                   key={hub}
                   type="button"
@@ -390,11 +396,14 @@ export const TravelOptimization = ({ onNext, itinerary = [] }) => {
               </ul>
             )}
           </div>
+        </div>
 
+        {/* Row 2: Travel Start Date + End Date side by side */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px', paddingTop: '16px', borderTop: '1px solid #f1f5f9' }}>
           {/* Start Date */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              Travel Start Date *
+            <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              📅 Travel Start Date *
             </label>
             <input 
               type="date" 
@@ -419,8 +428,8 @@ export const TravelOptimization = ({ onNext, itinerary = [] }) => {
 
           {/* End Date */}
           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-            <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
-              Travel End Date (Optional)
+            <label style={{ fontSize: '0.75rem', fontWeight: 700, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+              📅 Travel End Date (Optional)
             </label>
             <input 
               type="date" 
