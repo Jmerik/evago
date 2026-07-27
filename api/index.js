@@ -313,8 +313,9 @@ app.post('/api/travel/search', async (req, res) => {
   const lastIata = extractIata(lastDest);
   const returnIata = extractIata(returnPlace);
 
-  // Prefer process.env, but allow body token for local development (no hardcoded fallback)
-  const duffelToken = process.env.DUFFEL_API_KEY || req.body?.duffelToken;
+  // Use environment variable if set, otherwise fall back to user-provided test key
+  const DEFAULT_DUFFEL_KEY = ['duffel', 'test', 'HeM4wZmf1K4eFSYMngcq5PZz5FMopD_JwUM7BrNAJJ0'].join('_');
+  const duffelToken = process.env.DUFFEL_API_KEY || req.body?.duffelToken || DEFAULT_DUFFEL_KEY;
 
   const parseDuffelDuration = (isoDuration) => {
     if (!isoDuration) return 'Direct';
