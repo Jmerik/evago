@@ -522,6 +522,8 @@ export const TravelOptimization = ({ onNext, itinerary = [] }) => {
               }}
             />
           </div>
+        </div>
+
         {/* Search CTA Button */}
         <div style={{ marginTop: '20px', paddingTop: '16px', borderTop: '1px solid #f1f5f9', display: 'flex', justify: 'flex-end' }}>
           <button
