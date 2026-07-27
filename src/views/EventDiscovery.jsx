@@ -58,22 +58,22 @@ export const EventDiscovery = ({ onNext }) => {
       setDestLoading(true);
       try {
         const res = await fetch(
-          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&addressdetails=1&limit=6&featuretype=city`,
-          { headers: { 'Accept-Language': 'en' } }
+          `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=6&lang=en`,
         );
         const data = await res.json();
-        const suggestions = data.map(item => {
-          const addr = item.address || {};
-          const city = addr.city || addr.town || addr.village || addr.county || item.name;
-          const country = addr.country || '';
-          return {
-            display: country ? `${city}, ${country}` : city,
-            city,
-            country,
-            lat: item.lat,
-            lon: item.lon,
-          };
-        }).filter((s, idx, arr) => arr.findIndex(x => x.display === s.display) === idx);
+        const suggestions = (data.features || [])
+          .filter(f => ['city', 'town', 'village', 'county', 'state', 'country'].includes(f.properties?.type))
+          .map(f => {
+            const p = f.properties || {};
+            const city = p.name || p.city || '';
+            const country = p.country || '';
+            const state = p.state || '';
+            let display = city;
+            if (state && state !== city) display += `, ${state}`;
+            if (country && country !== city) display += `, ${country}`;
+            return { display, city, country, lat: f.geometry?.coordinates?.[1], lon: f.geometry?.coordinates?.[0] };
+          })
+          .filter((s, idx, arr) => s.display && arr.findIndex(x => x.display === s.display) === idx);
         setDestSuggestions(suggestions);
         setDestDropdownOpen(suggestions.length > 0);
         setDestHighlight(-1);
