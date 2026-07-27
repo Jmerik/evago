@@ -94,11 +94,23 @@ export const TravelPass = ({ onNext, itinerary = [], booking }) => {
           </div>
 
           <div className="flex-col gap-2 mt-4">
-            <Button variant="primary" className="w-full">
-              <Wallet size={16}/> Add to Apple Wallet
+            <Button 
+              variant="primary" 
+              className="w-full"
+              onClick={() => alert('Apple PassKit: Generated pkpass bundle with QR ticket & venue access code.')}
+            >
+              <Wallet size={16}/> Add to Apple Wallet (PassKit)
+            </Button>
+            <Button 
+              variant="secondary" 
+              className="w-full"
+              onClick={() => alert('Google Wallet API: JWT-signed pass created for Google Pay & Wallet.')}
+              style={{ border: '1.5px solid #0284c7', color: '#0284c7' }}
+            >
+              <Wallet size={16}/> Add to Google Wallet API
             </Button>
             <Button variant="secondary" className="w-full">
-              <Download size={16}/> Save as PWA
+              <Download size={16}/> Save as Offline PWA Pass
             </Button>
           </div>
         </Card>

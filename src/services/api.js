@@ -111,4 +111,20 @@ export const evagoApi = {
     }
     return response.json();
   },
+
+  /**
+   * Search travel options across Duffel, Kiwi, Travelpayouts, 12Go, Grab
+   */
+  async searchTravelOptions(searchParams) {
+    const response = await fetch(`${API_BASE_URL}/travel/search`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(searchParams),
+    });
+    if (!response.ok) {
+      throw new Error('Failed to search travel options');
+    }
+    return response.json();
+  },
 };
+
