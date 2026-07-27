@@ -62,18 +62,19 @@ export const EventDiscovery = ({ onNext }) => {
         );
         const data = await res.json();
         const suggestions = (data.features || [])
-          .filter(f => ['city', 'town', 'village', 'county', 'state', 'country'].includes(f.properties?.type))
           .map(f => {
             const p = f.properties || {};
-            const city = p.name || p.city || '';
-            const country = p.country || '';
+            const name = p.name || '';
+            const city = p.city || p.county || '';
             const state = p.state || '';
-            let display = city;
-            if (state && state !== city) display += `, ${state}`;
-            if (country && country !== city) display += `, ${country}`;
-            return { display, city, country, lat: f.geometry?.coordinates?.[1], lon: f.geometry?.coordinates?.[0] };
+            const country = p.country || '';
+            // Build a clean "City, Country" string
+            const parts = [name, city !== name ? city : '', country].filter(Boolean);
+            const display = [...new Set(parts)].join(', ');
+            return { display, lat: f.geometry?.coordinates?.[1], lon: f.geometry?.coordinates?.[0] };
           })
-          .filter((s, idx, arr) => s.display && arr.findIndex(x => x.display === s.display) === idx);
+          .filter((s, idx, arr) => s.display && arr.findIndex(x => x.display === s.display) === idx)
+          .slice(0, 6);
         setDestSuggestions(suggestions);
         setDestDropdownOpen(suggestions.length > 0);
         setDestHighlight(-1);
@@ -308,17 +309,18 @@ export const EventDiscovery = ({ onNext }) => {
           <p className="text-body mb-6">Skip the events list and just plan travel for a business trip or leisure getaway.</p>
           
           <div className="flex-col gap-4 max-w-lg">
-            <div className="flex-col gap-1" style={{ position: 'relative' }}>
+            <div className="flex-col gap-1">
               <label className="text-caption font-semibold text-primary">Destination *</label>
               <div style={{ position: 'relative' }}>
                 <input
                   ref={destInputRef}
                   type="text"
                   className="p-3 border border-[var(--color-card-border)] rounded-md outline-none text-primary bg-white"
-                  style={{ width: '100%', paddingRight: destLoading ? '2.5rem' : '1rem' }}
+                  style={{ width: '100%', boxSizing: 'border-box' }}
                   placeholder="e.g. Tokyo, Japan"
                   value={privateTripForm.destination}
                   autoComplete="off"
+                  spellCheck="false"
                   onChange={e => {
                     setPrivateTripForm(f => ({ ...f, destination: e.target.value }));
                     fetchDestinationSuggestions(e.target.value);
@@ -331,9 +333,9 @@ export const EventDiscovery = ({ onNext }) => {
                 {destLoading && (
                   <span style={{
                     position: 'absolute', right: '0.75rem', top: '50%', transform: 'translateY(-50%)',
-                    display: 'flex', alignItems: 'center', color: 'var(--color-text-secondary)'
+                    pointerEvents: 'none', display: 'flex', color: 'var(--color-text-secondary)'
                   }}>
-                    <Loader2 size={16} className="animate-spin" />
+                    <Loader2 size={15} className="animate-spin" />
                   </span>
                 )}
                 {destDropdownOpen && destSuggestions.length > 0 && (
@@ -341,18 +343,19 @@ export const EventDiscovery = ({ onNext }) => {
                     ref={destDropdownRef}
                     style={{
                       position: 'absolute',
-                      top: 'calc(100% + 4px)',
+                      top: '100%',
                       left: 0,
                       right: 0,
-                      zIndex: 100,
-                      background: 'var(--color-surface, #fff)',
-                      border: '1px solid var(--color-card-border)',
-                      borderRadius: '0.5rem',
-                      boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+                      marginTop: '4px',
+                      zIndex: 9999,
+                      background: '#fff',
+                      border: '1px solid #e2e8f0',
+                      borderRadius: '8px',
+                      boxShadow: '0 10px 30px rgba(0,0,0,0.15)',
                       listStyle: 'none',
-                      margin: 0,
-                      padding: '0.25rem 0',
-                      maxHeight: '220px',
+                      margin: '4px 0 0',
+                      padding: '4px 0',
+                      maxHeight: '240px',
                       overflowY: 'auto',
                     }}
                   >
@@ -364,22 +367,20 @@ export const EventDiscovery = ({ onNext }) => {
                           setPrivateTripForm(f => ({ ...f, destination: s.display }));
                           setDestDropdownOpen(false);
                           setDestSuggestions([]);
-                          destInputRef.current?.focus();
                         }}
                         onMouseEnter={() => setDestHighlight(idx)}
                         style={{
-                          padding: '0.625rem 1rem',
+                          padding: '10px 14px',
                           cursor: 'pointer',
                           display: 'flex',
                           alignItems: 'center',
-                          gap: '0.5rem',
-                          background: destHighlight === idx ? 'var(--color-primary-subtle, #f0f4ff)' : 'transparent',
-                          color: 'var(--color-text-primary)',
-                          fontSize: '0.875rem',
-                          transition: 'background 0.12s',
+                          gap: '8px',
+                          backgroundColor: destHighlight === idx ? '#f0f4ff' : 'transparent',
+                          color: '#1a1a2e',
+                          fontSize: '14px',
                         }}
                       >
-                        <MapPin size={14} style={{ flexShrink: 0, color: 'var(--color-primary, #4f6ef7)' }} />
+                        <MapPin size={13} style={{ flexShrink: 0, color: '#4f6ef7' }} />
                         <span>{s.display}</span>
                       </li>
                     ))}
