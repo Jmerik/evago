@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { Badge } from '../components/Badge';
@@ -39,6 +39,86 @@ export const EventDiscovery = ({ onNext }) => {
     startDate: '',
     endDate: ''
   });
+  const [destSuggestions, setDestSuggestions] = useState([]);
+  const [destLoading, setDestLoading] = useState(false);
+  const [destDropdownOpen, setDestDropdownOpen] = useState(false);
+  const [destHighlight, setDestHighlight] = useState(-1);
+  const destDebounceRef = useRef(null);
+  const destInputRef = useRef(null);
+  const destDropdownRef = useRef(null);
+
+  const fetchDestinationSuggestions = useCallback((query) => {
+    if (destDebounceRef.current) clearTimeout(destDebounceRef.current);
+    if (!query || query.length < 2) {
+      setDestSuggestions([]);
+      setDestDropdownOpen(false);
+      return;
+    }
+    destDebounceRef.current = setTimeout(async () => {
+      setDestLoading(true);
+      try {
+        const res = await fetch(
+          `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&addressdetails=1&limit=6&featuretype=city`,
+          { headers: { 'Accept-Language': 'en' } }
+        );
+        const data = await res.json();
+        const suggestions = data.map(item => {
+          const addr = item.address || {};
+          const city = addr.city || addr.town || addr.village || addr.county || item.name;
+          const country = addr.country || '';
+          return {
+            display: country ? `${city}, ${country}` : city,
+            city,
+            country,
+            lat: item.lat,
+            lon: item.lon,
+          };
+        }).filter((s, idx, arr) => arr.findIndex(x => x.display === s.display) === idx);
+        setDestSuggestions(suggestions);
+        setDestDropdownOpen(suggestions.length > 0);
+        setDestHighlight(-1);
+      } catch (err) {
+        console.error('Destination autocomplete error:', err);
+        setDestSuggestions([]);
+        setDestDropdownOpen(false);
+      } finally {
+        setDestLoading(false);
+      }
+    }, 300);
+  }, []);
+
+  const handleDestKeyDown = (e) => {
+    if (!destDropdownOpen || destSuggestions.length === 0) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setDestHighlight(h => Math.min(h + 1, destSuggestions.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setDestHighlight(h => Math.max(h - 1, 0));
+    } else if (e.key === 'Enter' && destHighlight >= 0) {
+      e.preventDefault();
+      const s = destSuggestions[destHighlight];
+      setPrivateTripForm(f => ({ ...f, destination: s.display }));
+      setDestDropdownOpen(false);
+      setDestSuggestions([]);
+    } else if (e.key === 'Escape') {
+      setDestDropdownOpen(false);
+    }
+  };
+
+  // Close dropdown on outside click
+  useEffect(() => {
+    const handleClick = (e) => {
+      if (
+        destInputRef.current && !destInputRef.current.contains(e.target) &&
+        destDropdownRef.current && !destDropdownRef.current.contains(e.target)
+      ) {
+        setDestDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, []);
 
   // Load regions on mount
   useEffect(() => {
@@ -228,15 +308,84 @@ export const EventDiscovery = ({ onNext }) => {
           <p className="text-body mb-6">Skip the events list and just plan travel for a business trip or leisure getaway.</p>
           
           <div className="flex-col gap-4 max-w-lg">
-            <div className="flex-col gap-1">
+            <div className="flex-col gap-1" style={{ position: 'relative' }}>
               <label className="text-caption font-semibold text-primary">Destination *</label>
-              <input 
-                type="text" 
-                className="p-3 border border-[var(--color-card-border)] rounded-md outline-none text-primary bg-white"
-                placeholder="e.g. Tokyo, Japan"
-                value={privateTripForm.destination}
-                onChange={e => setPrivateTripForm({...privateTripForm, destination: e.target.value})}
-              />
+              <div style={{ position: 'relative' }}>
+                <input
+                  ref={destInputRef}
+                  type="text"
+                  className="p-3 border border-[var(--color-card-border)] rounded-md outline-none text-primary bg-white"
+                  style={{ width: '100%', paddingRight: destLoading ? '2.5rem' : '1rem' }}
+                  placeholder="e.g. Tokyo, Japan"
+                  value={privateTripForm.destination}
+                  autoComplete="off"
+                  onChange={e => {
+                    setPrivateTripForm(f => ({ ...f, destination: e.target.value }));
+                    fetchDestinationSuggestions(e.target.value);
+                  }}
+                  onFocus={() => {
+                    if (destSuggestions.length > 0) setDestDropdownOpen(true);
+                  }}
+                  onKeyDown={handleDestKeyDown}
+                />
+                {destLoading && (
+                  <span style={{
+                    position: 'absolute', right: '0.75rem', top: '50%', transform: 'translateY(-50%)',
+                    display: 'flex', alignItems: 'center', color: 'var(--color-text-secondary)'
+                  }}>
+                    <Loader2 size={16} className="animate-spin" />
+                  </span>
+                )}
+                {destDropdownOpen && destSuggestions.length > 0 && (
+                  <ul
+                    ref={destDropdownRef}
+                    style={{
+                      position: 'absolute',
+                      top: 'calc(100% + 4px)',
+                      left: 0,
+                      right: 0,
+                      zIndex: 100,
+                      background: 'var(--color-surface, #fff)',
+                      border: '1px solid var(--color-card-border)',
+                      borderRadius: '0.5rem',
+                      boxShadow: '0 8px 24px rgba(0,0,0,0.12)',
+                      listStyle: 'none',
+                      margin: 0,
+                      padding: '0.25rem 0',
+                      maxHeight: '220px',
+                      overflowY: 'auto',
+                    }}
+                  >
+                    {destSuggestions.map((s, idx) => (
+                      <li
+                        key={idx}
+                        onMouseDown={e => {
+                          e.preventDefault();
+                          setPrivateTripForm(f => ({ ...f, destination: s.display }));
+                          setDestDropdownOpen(false);
+                          setDestSuggestions([]);
+                          destInputRef.current?.focus();
+                        }}
+                        onMouseEnter={() => setDestHighlight(idx)}
+                        style={{
+                          padding: '0.625rem 1rem',
+                          cursor: 'pointer',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '0.5rem',
+                          background: destHighlight === idx ? 'var(--color-primary-subtle, #f0f4ff)' : 'transparent',
+                          color: 'var(--color-text-primary)',
+                          fontSize: '0.875rem',
+                          transition: 'background 0.12s',
+                        }}
+                      >
+                        <MapPin size={14} style={{ flexShrink: 0, color: 'var(--color-primary, #4f6ef7)' }} />
+                        <span>{s.display}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
             </div>
             
             <div className="flex gap-4">
