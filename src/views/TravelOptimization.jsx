@@ -77,30 +77,12 @@ export const TravelOptimization = ({ onNext, itinerary = [] }) => {
   const firstStop = stops[0] || 'Singapore';
   const lastStop = stops[stops.length - 1] || firstStop;
 
-  // Dynamic travel options from backend API search (Duffel, Kiwi, Travelpayouts, 12Go, Grab)
-  const [inboundOptions, setInboundOptions] = useState([
-    { id: 0, provider: 'Singapore Airlines (Duffel Direct)', time: '13h 10m', price: 980, type: 'Direct (Non-stop)', tag: 'time', pipe: 'Duffel API — Primary Booking Pipe', disruptionScore: '98.4% On-Time (AviationStack)' },
-    { id: 1, provider: 'Emirates (Travelpayouts Data)', time: '14h 30m', price: 850, type: '1 Stop via Dubai', tag: 'comfort', pipe: 'Travelpayouts Data API — Price Comparison', disruptionScore: '96.8% On-Time' },
-    { id: 2, provider: 'Kiwi Tequila Regional Partner', time: '16h 15m', price: 620, type: '1 Stop via Doha', tag: 'price', pipe: 'Kiwi Tequila API — ASEAN Fallback', disruptionScore: '94.2% On-Time' },
-  ]);
+  // Live API options only — populated by handlePerformSearch() via Duffel API. Never hardcoded.
+  const [inboundOptions, setInboundOptions] = useState([]);
 
-  const [interCityOptions, setInterCityOptions] = useState([
-    { id: 0, provider: 'Shinkansen / Express Rail (12Go Partner)', time: '2h 15m', price: 140, type: 'Direct Train', tag: 'time', pipe: '12Go API / Reseller Program' },
-    { id: 1, provider: 'Regional Express (Easybook SOAP)', time: '1h 10m', price: 190, type: 'Direct Flight / Transit', tag: 'comfort', pipe: 'Easybook Partner Web Services' },
-    { id: 2, provider: '12Go Regional Highway Coach', time: '5h 30m', price: 45, type: 'Luxury Express Bus', tag: 'price', pipe: '12Go Affiliate API' },
-  ]);
-
-  const [outboundOptions, setOutboundOptions] = useState([
-    { id: 0, provider: 'Lufthansa (Duffel Pipe)', time: '13h 45m', price: 890, type: 'Direct (Non-stop)', tag: 'time', pipe: 'Duffel API — Primary Booking Pipe' },
-    { id: 1, provider: 'Singapore Airlines Premium (Travelpayouts Data)', time: '14h 10m', price: 1150, type: 'Direct Premium', tag: 'comfort', pipe: 'Travelpayouts Data API' },
-    { id: 2, provider: 'Qatar Airways (Kiwi Tequila Pipe)', time: '17h 00m', price: 640, type: '1 Stop via Doha', tag: 'price', pipe: 'Kiwi Tequila API' },
-  ]);
-
-  const [transferOptions, setTransferOptions] = useState([
-    { id: 0, provider: 'Express Rail Link', time: '25m', price: 25, type: 'Direct Airport Rail', tag: 'time', pipe: 'Public Rapid Transit API' },
-    { id: 1, provider: 'Grab Executive Chauffeur (Grab Partner)', time: '35m', price: 95, type: 'Private Premium Car', tag: 'comfort', pipe: 'Grab Developer API' },
-    { id: 2, provider: 'Grab Airport Shuttle (Grab Share)', time: '50m', price: 15, type: 'Shared Express Shuttle', tag: 'price', pipe: 'Grab Developer API' },
-  ]);
+  const [interCityOptions, setInterCityOptions] = useState([]);
+  const [outboundOptions, setOutboundOptions] = useState([]);
+  const [transferOptions, setTransferOptions] = useState([]);
 
   const [dynamicSegments, setDynamicSegments] = useState([]);
   const [selectedSegmentOptions, setSelectedSegmentOptions] = useState({});
