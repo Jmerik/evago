@@ -725,7 +725,7 @@ export const TravelOptimization = ({ onNext, itinerary = [] }) => {
             </div>
             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '14px' }}>
               {stopsWithDates.filter((s) => s.needsDate).map((s) => {
-                const ov = stopOverrides[s.city] || { date: '', time: '09:00' };
+                const ov = stopOverrides[s.city] || { date: '', time: '12:00' };
                 const filled = Boolean(ov.date);
                 return (
                   <div

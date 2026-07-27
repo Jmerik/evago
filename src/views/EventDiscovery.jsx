@@ -26,7 +26,7 @@ export const EventDiscovery = ({ onNext }) => {
   const [customForm, setCustomForm] = useState({
     name: '',
     date: '',
-    time: '',
+    time: '12:00',
     region: '',
     address: '',
     visibility: 'private' // 'private' or 'public'
@@ -37,12 +37,13 @@ export const EventDiscovery = ({ onNext }) => {
   const [selectedDestinations, setSelectedDestinations] = useState([]);
   const [destInputText, setDestInputText] = useState('');
   const [destDateInput, setDestDateInput] = useState('');
-  const [destTimeInput, setDestTimeInput] = useState('');
+  const [destTimeInput, setDestTimeInput] = useState('12:00');
   const [destSuggestions, setDestSuggestions] = useState([]);
   const [destLoading, setDestLoading] = useState(false);
   const [destDropdownOpen, setDestDropdownOpen] = useState(false);
   const [destHighlight, setDestHighlight] = useState(-1);
   const [destRect, setDestRect] = useState({ top: 0, left: 0, width: 0 });
+  const [resolvedDest, setResolvedDest] = useState(null);
   const destDebounceRef = useRef(null);
 
   // Cleanup timeout on unmount
@@ -58,17 +59,18 @@ export const EventDiscovery = ({ onNext }) => {
     const trimmed = (destName || '').trim();
     if (!trimmed) return;
     if (!selectedDestinations.find(d => d.name === trimmed)) {
-      setSelectedDestinations(prev => [...prev, { 
-        name: trimmed, 
-        date: initialDate || destDateInput, 
-        time: initialTime || destTimeInput 
+      setSelectedDestinations(prev => [...prev, {
+        name: trimmed,
+        date: initialDate || destDateInput,
+        time: initialTime || destTimeInput || '12:00',
       }]);
     }
     setDestInputText('');
     setDestDateInput('');
-    setDestTimeInput('');
+    setDestTimeInput('12:00');
     setDestDropdownOpen(false);
     setDestSuggestions([]);
+    setResolvedDest(null);
   };
 
   const removeDestination = (indexToRemove) => {
@@ -139,17 +141,13 @@ export const EventDiscovery = ({ onNext }) => {
         setDestHighlight(h => Math.max(h - 1, 0));
       } else if (e.key === 'Enter') {
         e.preventDefault();
-        if (destHighlight >= 0 && destSuggestions[destHighlight]) {
+        if (destHighlight >= 0 && destSuggestions[destHighlight] && destDateInput) {
+          setResolvedDest(destSuggestions[destHighlight]);
           addDestination(destSuggestions[destHighlight].display);
-        } else if (destInputText.trim()) {
-          addDestination(destInputText);
         }
       } else if (e.key === 'Escape') {
         setDestDropdownOpen(false);
       }
-    } else if (e.key === 'Enter' && destInputText.trim()) {
-      e.preventDefault();
-      addDestination(destInputText);
     }
   };
 
@@ -252,10 +250,12 @@ export const EventDiscovery = ({ onNext }) => {
 
   const handleCreatePrivateTrip = () => {
     if (selectedDestinations.length === 0) return;
-    
+    if (selectedDestinations.some(s => !s.date)) return;
+
     const tripEvents = selectedDestinations.map((stop, idx) => {
+      const time = stop.time || '12:00';
       const startAt = stop.date
-        ? `${stop.date}T${stop.time || '00:00'}:00`
+        ? `${stop.date}T${time}:00`
         : null;
       return {
         id: `trip-${Date.now()}-${idx}`,
@@ -264,14 +264,14 @@ export const EventDiscovery = ({ onNext }) => {
         source: 'private_trip',
         startAt,
         scheduledDate: stop.date,
-        scheduledTime: stop.time,
+        scheduledTime: time,
         venue: {
           city: stop.name.split(',')[0].trim(),
           fullAddress: stop.name
         }
       };
     });
-    
+
     setItinerary(tripEvents);
     onNext(tripEvents);
   };
@@ -553,10 +553,11 @@ export const EventDiscovery = ({ onNext }) => {
                       value={destInputText}
                       autoComplete="off"
                       spellCheck="false"
-                      onChange={e => {
-                        setDestInputText(e.target.value);
-                        fetchDestinationSuggestions(e.target.value);
-                      }}
+onChange={e => {
+                          setDestInputText(e.target.value);
+                          setResolvedDest(null);
+                          fetchDestinationSuggestions(e.target.value);
+                        }}
                       onFocus={(e) => {
                         e.target.style.borderColor = '#0284c7';
                         e.target.style.boxShadow = '0 0 0 3px rgba(2, 132, 199, 0.15)';
@@ -604,6 +605,7 @@ export const EventDiscovery = ({ onNext }) => {
                             key={idx}
                             onMouseDown={e => {
                               e.preventDefault();
+                              setResolvedDest(s);
                               addDestination(s.display);
                             }}
                             onMouseEnter={() => setDestHighlight(idx)}
@@ -685,38 +687,50 @@ export const EventDiscovery = ({ onNext }) => {
                 type="button"
                 onMouseDown={(e) => {
                   e.preventDefault();
-                  if (destInputText.trim()) addDestination(destInputText);
+                  if (resolvedDest && destDateInput) addDestination(resolvedDest.display);
                 }}
                 onClick={() => {
-                  if (destInputText.trim()) addDestination(destInputText);
+                  if (resolvedDest && destDateInput) addDestination(resolvedDest.display);
                 }}
-                disabled={!destInputText.trim()}
+                disabled={!resolvedDest || !destDateInput}
+                title={!resolvedDest
+                  ? 'Select a destination from the suggestions'
+                  : !destDateInput
+                    ? 'Pick an arrival date'
+                    : 'Add this stop to your route'}
                 style={{
                   marginTop: '4px',
                   padding: '12px 20px',
                   borderRadius: '8px',
                   border: 'none',
-                  background: destInputText.trim() ? '#0284c7' : '#e2e8f0',
-                  color: destInputText.trim() ? '#ffffff' : '#94a3b8',
+                  background: (resolvedDest && destDateInput) ? '#0284c7' : '#e2e8f0',
+                  color: (resolvedDest && destDateInput) ? '#ffffff' : '#94a3b8',
                   fontWeight: 600,
                   fontSize: '0.9rem',
-                  cursor: destInputText.trim() ? 'pointer' : 'not-allowed',
+                  cursor: (resolvedDest && destDateInput) ? 'pointer' : 'not-allowed',
                   display: 'flex',
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: '6px',
                   transition: 'all 0.15s ease',
-                  boxShadow: destInputText.trim() ? '0 2px 8px rgba(2, 132, 199, 0.25)' : 'none'
+                  boxShadow: (resolvedDest && destDateInput) ? '0 2px 8px rgba(2, 132, 199, 0.25)' : 'none'
                 }}
               >
                 <Plus size={16} /> Add Stop to Route
               </button>
+              {(!resolvedDest || !destDateInput) && (
+                <span style={{ fontSize: '0.72rem', color: '#dc2626', fontWeight: 600, marginTop: '4px' }}>
+                  {!resolvedDest
+                    ? '⚠️ Pick a destination from the suggestions list (no free-text cities allowed)'
+                    : '⚠️ Pick an arrival date (time defaults to 12:00)'}
+                </span>
+              )}
             </div>
 
             {/* Action CTA Button */}
             <button
               type="button"
-              disabled={selectedDestinations.length === 0}
+              disabled={selectedDestinations.length === 0 || !selectedDestinations.every(s => s.date)}
               onClick={handleCreatePrivateTrip}
               style={{
                 marginTop: '12px',
@@ -724,39 +738,44 @@ export const EventDiscovery = ({ onNext }) => {
                 padding: '14px 24px',
                 borderRadius: '8px',
                 border: 'none',
-                background: selectedDestinations.length > 0 
-                  ? 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)' 
+background: (selectedDestinations.length > 0 && selectedDestinations.every(s => s.date))
+                  ? 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)'
                   : '#cbd5e1',
-                color: '#ffffff',
-                fontWeight: 700,
-                fontSize: '1rem',
-                cursor: selectedDestinations.length > 0 ? 'pointer' : 'not-allowed',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: '8px',
-                boxShadow: selectedDestinations.length > 0 
-                  ? '0 4px 14px rgba(2, 132, 199, 0.35)' 
-                  : 'none',
-                transition: 'all 0.2s ease'
-              }}
-            >
-              <span>Start Planning Trip</span>
-              {selectedDestinations.length > 0 && (
-                <span style={{
-                  background: 'rgba(255, 255, 255, 0.2)',
-                  padding: '2px 8px',
-                  borderRadius: '12px',
-                  fontSize: '0.8rem'
-                }}>
-                  {selectedDestinations.length} Stop{selectedDestinations.length > 1 ? 's' : ''}
-                  {selectedDestinations.every(s => s.date) && ' · All Scheduled'}
-                </span>
-              )}
-              <ArrowRight size={18} />
-            </button>
-          </div>
-        </Card>
+              color: '#ffffff',
+              fontWeight: 700,
+              fontSize: '1rem',
+              cursor: (selectedDestinations.length > 0 && selectedDestinations.every(s => s.date)) ? 'pointer' : 'not-allowed',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: '8px',
+              boxShadow: (selectedDestinations.length > 0 && selectedDestinations.every(s => s.date))
+                ? '0 4px 14px rgba(2, 132, 199, 0.35)'
+                : 'none',
+              transition: 'all 0.2s ease'
+            }}
+          >
+            <span>Start Planning Trip</span>
+            {selectedDestinations.length > 0 && (
+              <span style={{
+                background: 'rgba(255, 255, 255, 0.2)',
+                padding: '2px 8px',
+                borderRadius: '12px',
+                fontSize: '0.8rem'
+              }}>
+                {selectedDestinations.length} Stop{selectedDestinations.length > 1 ? 's' : ''}
+                {selectedDestinations.every(s => s.date) && ' · All Scheduled'}
+              </span>
+            )}
+            <ArrowRight size={18} />
+          </button>
+          {selectedDestinations.length > 0 && !selectedDestinations.every(s => s.date) && (
+            <span style={{ fontSize: '0.72rem', color: '#dc2626', fontWeight: 600, marginTop: '6px', textAlign: 'center' }}>
+              ⚠️ Every stop needs an arrival date (time auto-fills to 12:00) before you can plan the trip
+            </span>
+          )}
+        </div>
+      </Card>
       )}
 
       {/* ─── CUSTOM EVENT MODE ─── */}
