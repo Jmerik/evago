@@ -343,6 +343,15 @@ app.post('/api/travel/search', async (req, res) => {
     return h * 60 + m;
   };
 
+  const parseDuffelDuration = (isoDuration) => {
+    if (!isoDuration) return 'Direct';
+    const hoursMatch = isoDuration.match(/(\d+)H/i);
+    const minsMatch = isoDuration.match(/(\d+)M/i);
+    const hours = hoursMatch ? hoursMatch[1] : '0';
+    const mins = minsMatch ? minsMatch[1] : '0';
+    return `${hours}h ${mins}m`;
+  };
+
   const formatFlightTime = (isoString) => {
     if (!isoString) return '';
     try {
