@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { Badge } from '../components/Badge';
-import { MapPin, Calendar, Clock, ArrowRight, Link as LinkIcon, CheckCircle2, Loader2, Globe, Plus, Minus, Lock, Unlock } from 'lucide-react';
+import { MapPin, Calendar, Clock, ArrowRight, Link as LinkIcon, CheckCircle2, Loader2, Globe, Plus, Minus, Lock, Unlock, X } from 'lucide-react';
 import { evagoApi } from '../services/api';
 
 export const EventDiscovery = ({ onNext }) => {
@@ -33,12 +33,9 @@ export const EventDiscovery = ({ onNext }) => {
   });
   const [isSubmittingCustom, setIsSubmittingCustom] = useState(false);
 
-  // Private Trip State
-  const [privateTripForm, setPrivateTripForm] = useState({
-    destination: '',
-    startDate: '',
-    endDate: ''
-  });
+  // Private Trip State (Multiple Destinations)
+  const [selectedDestinations, setSelectedDestinations] = useState([]);
+  const [destInputText, setDestInputText] = useState('');
   const [destSuggestions, setDestSuggestions] = useState([]);
   const [destLoading, setDestLoading] = useState(false);
   const [destDropdownOpen, setDestDropdownOpen] = useState(false);
@@ -47,6 +44,21 @@ export const EventDiscovery = ({ onNext }) => {
   const destDebounceRef = useRef(null);
   const destInputRef = useRef(null);
   const destDropdownRef = useRef(null);
+
+  const addDestination = (destName) => {
+    const trimmed = (destName || '').trim();
+    if (!trimmed) return;
+    if (!selectedDestinations.includes(trimmed)) {
+      setSelectedDestinations(prev => [...prev, trimmed]);
+    }
+    setDestInputText('');
+    setDestDropdownOpen(false);
+    setDestSuggestions([]);
+  };
+
+  const removeDestination = (indexToRemove) => {
+    setSelectedDestinations(prev => prev.filter((_, idx) => idx !== indexToRemove));
+  };
 
   const updateDestRect = useCallback(() => {
     if (destInputRef.current) {
@@ -97,21 +109,26 @@ export const EventDiscovery = ({ onNext }) => {
   }, [updateDestRect]);
 
   const handleDestKeyDown = (e) => {
-    if (!destDropdownOpen || destSuggestions.length === 0) return;
-    if (e.key === 'ArrowDown') {
+    if (destDropdownOpen && destSuggestions.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setDestHighlight(h => Math.min(h + 1, destSuggestions.length - 1));
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setDestHighlight(h => Math.max(h - 1, 0));
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        if (destHighlight >= 0 && destSuggestions[destHighlight]) {
+          addDestination(destSuggestions[destHighlight].display);
+        } else if (destInputText.trim()) {
+          addDestination(destInputText);
+        }
+      } else if (e.key === 'Escape') {
+        setDestDropdownOpen(false);
+      }
+    } else if (e.key === 'Enter' && destInputText.trim()) {
       e.preventDefault();
-      setDestHighlight(h => Math.min(h + 1, destSuggestions.length - 1));
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      setDestHighlight(h => Math.max(h - 1, 0));
-    } else if (e.key === 'Enter' && destHighlight >= 0) {
-      e.preventDefault();
-      const s = destSuggestions[destHighlight];
-      setPrivateTripForm(f => ({ ...f, destination: s.display }));
-      setDestDropdownOpen(false);
-      setDestSuggestions([]);
-    } else if (e.key === 'Escape') {
-      setDestDropdownOpen(false);
+      addDestination(destInputText);
     }
   };
 
@@ -213,27 +230,21 @@ export const EventDiscovery = ({ onNext }) => {
   };
 
   const handleCreatePrivateTrip = () => {
-    if (!privateTripForm.destination || !privateTripForm.startDate) return;
+    if (selectedDestinations.length === 0) return;
     
-    // Instead of adding an event to itinerary, we can pass a dummy "trip" 
-    // object so the next screen knows what's up, but since the MVP assumes
-    // an array of events, we'll wrap it as a single multi-day event.
-    const privateTripEvent = {
-      id: `trip-${Date.now()}`,
-      name: `Trip to ${privateTripForm.destination}`,
-      type: 'main_conference', // use this style so it stands out
+    const tripEvents = selectedDestinations.map((dest, idx) => ({
+      id: `trip-${Date.now()}-${idx}`,
+      name: `Trip to ${dest}`,
+      type: 'main_conference',
       source: 'private_trip',
-      startAt: `${privateTripForm.startDate}T00:00:00Z`,
-      endAt: privateTripForm.endDate ? `${privateTripForm.endDate}T23:59:59Z` : undefined,
       venue: {
-        city: privateTripForm.destination,
-        fullAddress: privateTripForm.destination
+        city: dest.split(',')[0].trim(),
+        fullAddress: dest
       }
-    };
+    }));
     
-    // Clear itinerary and use only this trip
-    setItinerary([privateTripEvent]);
-    onNext([privateTripEvent]);
+    setItinerary(tripEvents);
+    onNext(tripEvents);
   };
 
   const toggleItinerary = (event) => {
@@ -313,118 +324,133 @@ export const EventDiscovery = ({ onNext }) => {
       {/* ─── PRIVATE ITINERARY MODE ─── */}
       {activeMode === 'private_trip' && (
         <Card status="standard" className="mb-6">
-          <h3 className="mb-4">Plan a Private Trip</h3>
-          <p className="text-body mb-6">Skip the events list and just plan travel for a business trip or leisure getaway.</p>
+          <h3 className="mb-2">Plan a Private Trip</h3>
+          <p className="text-body mb-6">Add one or more destination cities for your multi-stop or single trip.</p>
           
-          <div className="flex-col gap-4 max-w-lg">
-            <div className="flex-col gap-1">
-              <label className="text-caption font-semibold text-primary">Destination *</label>
-              <div style={{ position: 'relative' }}>
-                <input
-                  ref={destInputRef}
-                  type="text"
-                  className="p-3 border border-[var(--color-card-border)] rounded-md outline-none text-primary bg-white"
-                  style={{ width: '100%', boxSizing: 'border-box' }}
-                  placeholder="e.g. Tokyo, Japan"
-                  value={privateTripForm.destination}
-                  autoComplete="off"
-                  spellCheck="false"
-                  onChange={e => {
-                    setPrivateTripForm(f => ({ ...f, destination: e.target.value }));
-                    fetchDestinationSuggestions(e.target.value);
-                  }}
-                  onFocus={() => {
-                    if (destSuggestions.length > 0) setDestDropdownOpen(true);
-                  }}
-                  onKeyDown={handleDestKeyDown}
-                />
-                {destLoading && (
-                  <span style={{
-                    position: 'absolute', right: '0.75rem', top: '50%', transform: 'translateY(-50%)',
-                    pointerEvents: 'none', display: 'flex', color: 'var(--color-text-secondary)'
-                  }}>
-                    <Loader2 size={15} className="animate-spin" />
-                  </span>
-                )}
-                {destDropdownOpen && destSuggestions.length > 0 && (
-                  <ul
-                    ref={destDropdownRef}
-                    style={{
-                      position: 'fixed',
-                      top: destRect.top + 4,
-                      left: destRect.left,
-                      width: destRect.width,
-                      zIndex: 99999,
-                      background: '#ffffff',
-                      border: '1px solid #cbd5e1',
-                      borderRadius: '8px',
-                      boxShadow: '0 12px 32px rgba(0,0,0,0.18)',
-                      listStyle: 'none',
-                      margin: 0,
-                      padding: '4px 0',
-                      maxHeight: '240px',
-                      overflowY: 'auto',
-                    }}
-                  >
-                    {destSuggestions.map((s, idx) => (
-                      <li
-                        key={idx}
-                        onMouseDown={e => {
-                          e.preventDefault();
-                          setPrivateTripForm(f => ({ ...f, destination: s.display }));
-                          setDestDropdownOpen(false);
-                          setDestSuggestions([]);
-                        }}
-                        onMouseEnter={() => setDestHighlight(idx)}
-                        style={{
-                          padding: '10px 14px',
-                          cursor: 'pointer',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: '8px',
-                          backgroundColor: destHighlight === idx ? '#eff6ff' : '#ffffff',
-                          color: '#111827',
-                          fontSize: '14px',
-                          lineHeight: '1.4',
-                        }}
+          <div className="flex-col gap-4 max-w-xl">
+            {/* Added Destination Tags */}
+            {selectedDestinations.length > 0 && (
+              <div className="flex-col gap-2 p-3 bg-[var(--color-surface,#f8fafc)] border border-[var(--color-card-border,#cbd5e1)] rounded-lg">
+                <label className="text-caption font-semibold text-primary">
+                  Selected Destinations ({selectedDestinations.length}):
+                </label>
+                <div className="flex flex-wrap gap-2">
+                  {selectedDestinations.map((dest, idx) => (
+                    <div 
+                      key={idx} 
+                      className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-md text-sm font-medium text-blue-900 shadow-sm"
+                    >
+                      <MapPin size={14} className="text-blue-600 flex-shrink-0" />
+                      <span>{dest}</span>
+                      <button
+                        type="button"
+                        onClick={() => removeDestination(idx)}
+                        className="ml-1 text-blue-400 hover:text-blue-700 font-bold p-0.5 rounded focus:outline-none"
+                        title="Remove destination"
                       >
-                        <MapPin size={13} style={{ flexShrink: 0, color: '#3b82f6' }} />
-                        <span>{s.display}</span>
-                      </li>
-                    ))}
-                  </ul>
-                )}
+                        <X size={14} />
+                      </button>
+                    </div>
+                  ))}
+                </div>
               </div>
-            </div>
-            
-            <div className="flex gap-4">
-              <div className="flex-col gap-1 flex-1">
-                <label className="text-caption font-semibold text-primary">Start Date *</label>
-                <input 
-                  type="date" 
-                  className="p-3 border border-[var(--color-card-border)] rounded-md outline-none text-primary bg-white"
-                  value={privateTripForm.startDate}
-                  onChange={e => setPrivateTripForm({...privateTripForm, startDate: e.target.value})}
-                />
-              </div>
-              <div className="flex-col gap-1 flex-1">
-                <label className="text-caption font-semibold text-primary">End Date (Optional)</label>
-                <input 
-                  type="date" 
-                  className="p-3 border border-[var(--color-card-border)] rounded-md outline-none text-primary bg-white"
-                  value={privateTripForm.endDate}
-                  onChange={e => setPrivateTripForm({...privateTripForm, endDate: e.target.value})}
-                />
+            )}
+
+            <div className="flex-col gap-1">
+              <label className="text-caption font-semibold text-primary">Add Destination *</label>
+              <div className="flex gap-2" style={{ position: 'relative' }}>
+                <div className="flex-1" style={{ position: 'relative' }}>
+                  <input
+                    ref={destInputRef}
+                    type="text"
+                    className="p-3 w-full border border-[var(--color-card-border)] rounded-md outline-none text-primary bg-white"
+                    placeholder="e.g. Tokyo, Japan or FRA"
+                    value={destInputText}
+                    autoComplete="off"
+                    spellCheck="false"
+                    onChange={e => {
+                      setDestInputText(e.target.value);
+                      fetchDestinationSuggestions(e.target.value);
+                    }}
+                    onFocus={() => {
+                      if (destSuggestions.length > 0) setDestDropdownOpen(true);
+                    }}
+                    onKeyDown={handleDestKeyDown}
+                  />
+                  {destLoading && (
+                    <span style={{
+                      position: 'absolute', right: '0.75rem', top: '50%', transform: 'translateY(-50%)',
+                      pointerEvents: 'none', display: 'flex', color: 'var(--color-text-secondary)'
+                    }}>
+                      <Loader2 size={15} className="animate-spin" />
+                    </span>
+                  )}
+                  {destDropdownOpen && destSuggestions.length > 0 && (
+                    <ul
+                      ref={destDropdownRef}
+                      style={{
+                        position: 'fixed',
+                        top: destRect.top + 4,
+                        left: destRect.left,
+                        width: destRect.width,
+                        zIndex: 99999,
+                        background: '#ffffff',
+                        border: '1px solid #cbd5e1',
+                        borderRadius: '8px',
+                        boxShadow: '0 12px 32px rgba(0,0,0,0.18)',
+                        listStyle: 'none',
+                        margin: 0,
+                        padding: '4px 0',
+                        maxHeight: '240px',
+                        overflowY: 'auto',
+                      }}
+                    >
+                      {destSuggestions.map((s, idx) => (
+                        <li
+                          key={idx}
+                          onMouseDown={e => {
+                            e.preventDefault();
+                            addDestination(s.display);
+                          }}
+                          onMouseEnter={() => setDestHighlight(idx)}
+                          style={{
+                            padding: '10px 14px',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '8px',
+                            backgroundColor: destHighlight === idx ? '#eff6ff' : '#ffffff',
+                            color: '#111827',
+                            fontSize: '14px',
+                            lineHeight: '1.4',
+                          }}
+                        >
+                          <MapPin size={13} style={{ flexShrink: 0, color: '#3b82f6' }} />
+                          <span>{s.display}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+
+                <Button 
+                  variant="secondary" 
+                  type="button" 
+                  onClick={() => addDestination(destInputText)}
+                  disabled={!destInputText.trim()}
+                >
+                  <Plus size={16} className="mr-1 inline" /> Add
+                </Button>
               </div>
             </div>
 
             <Button 
               variant="primary" 
               className="mt-4 w-full"
-              disabled={!privateTripForm.destination || !privateTripForm.startDate}
+              disabled={selectedDestinations.length === 0}
               onClick={handleCreatePrivateTrip}
             >
-              Start Planning Trip <ArrowRight size={16} className="ml-2 inline" />
+              Start Planning Trip ({selectedDestinations.length} Stop{selectedDestinations.length !== 1 ? 's' : ''}) <ArrowRight size={16} className="ml-2 inline" />
             </Button>
           </div>
         </Card>

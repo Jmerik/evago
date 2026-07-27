@@ -14,6 +14,13 @@ export const TravelOptimization = ({ onNext, itinerary = [] }) => {
     : 'Singapore';
 
   const [returnPlace, setReturnPlace] = useState('London (LHR)');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+
+  // Extract all destination cities from itinerary
+  const destinationsList = itinerary.length > 0
+    ? Array.from(new Set(itinerary.map(i => i.venue?.city || i.name.replace(/^Trip to /, '')))).join(' ➔ ')
+    : 'Singapore';
 
   // State for selected segments
   const [selectedFlight, setSelectedFlight] = useState(0);
@@ -35,7 +42,10 @@ export const TravelOptimization = ({ onNext, itinerary = [] }) => {
     onNext({
       departure,
       destination: primaryCity,
+      destinationsList,
       returnPlace,
+      startDate,
+      endDate,
       flight: flightOptions[selectedFlight],
       transfer: transferOptions[selectedTransfer],
       totalCost: flightOptions[selectedFlight].price + transferOptions[selectedTransfer].price
@@ -46,7 +56,7 @@ export const TravelOptimization = ({ onNext, itinerary = [] }) => {
     <div className="flex-col gap-6">
       <div className="mb-4">
         <h2>Travel Optimisation</h2>
-        <p className="text-body mt-2">Customise your travel segments and set your departure locations.</p>
+        <p className="text-body mt-2">Customise your travel segments, set your dates, and configure departure locations.</p>
       </div>
 
       {/* Itinerary Context Banner */}
@@ -54,11 +64,11 @@ export const TravelOptimization = ({ onNext, itinerary = [] }) => {
         <Card status="premium" className="mb-6 bg-[var(--color-surface)]">
           <div className="flex justify-between items-center">
             <div>
-              <div className="text-caption font-semibold text-primary">DESTINATION & EVENTS</div>
-              <h3 className="text-primary mt-1">{primaryCity}</h3>
-              <p className="text-caption mt-1">Optimising travel for {itinerary.length} selected item{itinerary.length > 1 ? 's' : ''}</p>
+              <div className="text-caption font-semibold text-primary">DESTINATION & ROUTE</div>
+              <h3 className="text-primary mt-1">{destinationsList}</h3>
+              <p className="text-caption mt-1">Optimising travel for {itinerary.length} selected stop{itinerary.length > 1 ? 's' : ''}</p>
             </div>
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               {itinerary.map(item => (
                 <Badge key={item.id} status="default">{item.name}</Badge>
               ))}
@@ -68,11 +78,11 @@ export const TravelOptimization = ({ onNext, itinerary = [] }) => {
       )}
 
       <Card status="standard" className="mb-6">
-        <h3 className="mb-4">Trip Details</h3>
+        <h3 className="mb-4">Trip Details & Travel Dates</h3>
         <div className="grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
           <div className="flex-col gap-2">
-            <label className="text-caption">Departure Location</label>
-            <div className="flex items-center gap-2 p-3 border border-[var(--color-card-border)] rounded-md">
+            <label className="text-caption font-semibold text-primary">Departure Location</label>
+            <div className="flex items-center gap-2 p-3 border border-[var(--color-card-border)] rounded-md bg-white">
               <MapPin size={16} className="text-tertiary" />
               <input 
                 type="text" 
@@ -83,13 +93,39 @@ export const TravelOptimization = ({ onNext, itinerary = [] }) => {
             </div>
           </div>
           <div className="flex-col gap-2">
-            <label className="text-caption">Return Location</label>
-            <div className="flex items-center gap-2 p-3 border border-[var(--color-card-border)] rounded-md">
+            <label className="text-caption font-semibold text-primary">Return Location</label>
+            <div className="flex items-center gap-2 p-3 border border-[var(--color-card-border)] rounded-md bg-white">
               <MapPin size={16} className="text-tertiary" />
               <input 
                 type="text" 
                 value={returnPlace} 
                 onChange={(e) => setReturnPlace(e.target.value)} 
+                className="w-full border-none outline-none text-primary bg-transparent font-medium"
+              />
+            </div>
+          </div>
+
+          <div className="flex-col gap-2">
+            <label className="text-caption font-semibold text-primary">Travel Start Date *</label>
+            <div className="flex items-center gap-2 p-3 border border-[var(--color-card-border)] rounded-md bg-white">
+              <Calendar size={16} className="text-tertiary" />
+              <input 
+                type="date" 
+                value={startDate} 
+                onChange={(e) => setStartDate(e.target.value)} 
+                className="w-full border-none outline-none text-primary bg-transparent font-medium"
+              />
+            </div>
+          </div>
+
+          <div className="flex-col gap-2">
+            <label className="text-caption font-semibold text-primary">Travel End Date (Optional)</label>
+            <div className="flex items-center gap-2 p-3 border border-[var(--color-card-border)] rounded-md bg-white">
+              <Calendar size={16} className="text-tertiary" />
+              <input 
+                type="date" 
+                value={endDate} 
+                onChange={(e) => setEndDate(e.target.value)} 
                 className="w-full border-none outline-none text-primary bg-transparent font-medium"
               />
             </div>
