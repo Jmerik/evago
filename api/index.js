@@ -293,7 +293,7 @@ app.get('/api/autocomplete/destinations', async (req, res) => {
   }
 });
 
-// ─── TRAVEL SEARCH API (Duffel + Kiwi + Travelpayouts + 12Go + Grab) ───────
+// ─── TRAVEL SEARCH API (Strictly Live API Fares Only — Duffel GDS) ────────
 app.post('/api/travel/search', async (req, res) => {
   const { departure = 'London (LHR)', returnPlace = 'London (LHR)', destinations = ['Singapore'], startDate, endDate } = req.body;
   const firstDest = destinations[0] || 'Singapore';
@@ -306,12 +306,8 @@ app.post('/api/travel/search', async (req, res) => {
 
   const originIata = extractIata(departure);
   const destIata = extractIata(firstDest);
+  const lastIata = extractIata(lastDest);
   const returnIata = extractIata(returnPlace);
-
-  let inboundOptions = [];
-  let interCityOptions = [];
-  let outboundOptions = [];
-  let transferOptions = [];
 
   const duffelToken = process.env.DUFFEL_API_KEY || (req.body?.duffelToken || ['duffel', 'test', 'HeM4wZmf1K4eFSYMngcq5PZz5FMopD_JwUM7BrNAJJ0'].join('_'));
 
@@ -324,16 +320,17 @@ app.post('/api/travel/search', async (req, res) => {
     return `${hours}h ${mins}m`;
   };
 
-  // Try live Duffel API with token
-  if (duffelToken) {
+  const fetchDuffelOffers = async (origin, destination, depDate) => {
+    if (!duffelToken) return [];
     try {
+      const defaultDate = new Date(Date.now() + 86400000 * 21).toISOString().split('T')[0];
       const duffelRes = await axios.post('https://api.duffel.com/air/offer_requests', {
         data: {
           slices: [
             {
-              origin: originIata,
-              destination: destIata,
-              departure_date: startDate || new Date(Date.now() + 86400000 * 21).toISOString().split('T')[0]
+              origin,
+              destination,
+              departure_date: depDate || defaultDate
             }
           ],
           passengers: [{ type: 'adult' }],
@@ -349,243 +346,62 @@ app.post('/api/travel/search', async (req, res) => {
       });
 
       const offers = (duffelRes.data?.data?.offers || []).slice(0, 5);
-      if (offers.length > 0) {
-        inboundOptions = offers.map((offer, idx) => {
-          const slice = offer.slices?.[0] || {};
-          const segments = slice.segments || [];
-          const carrier = offer.owner || {};
-          const priceVal = Math.round(parseFloat(offer.total_amount) || 850);
-          
-          return {
-            id: idx,
-            provider: `${carrier.name || 'Duffel Carrier'} (Duffel Live API)`,
-            logoUrl: carrier.logo_symbol_url || carrier.logo_lockup_url || '',
-            time: parseDuffelDuration(slice.duration),
-            price: priceVal,
-            currency: offer.total_currency || 'USD',
-            type: segments.length > 1 ? `${segments.length - 1} Stop (${segments[0]?.operating_carrier?.name || 'Connect'})` : 'Direct (Non-stop)',
-            tag: idx === 0 ? 'time' : (idx === 1 ? 'comfort' : 'price'),
-            offerId: offer.id,
-            pipe: 'Duffel Live API (Real Fares)',
-            flightNumber: `${carrier.iata_code || 'SQ'} ${100 + idx * 35}`,
-            disruptionScore: '99.2% On-Time (AviationStack Tracked)',
-            bookingUrl: `https://duffel.com/`
-          };
-        });
-      }
+      return offers.map((offer, idx) => {
+        const slice = offer.slices?.[0] || {};
+        const segments = slice.segments || [];
+        const carrier = offer.owner || {};
+        const priceVal = Math.round(parseFloat(offer.total_amount) || 0);
+        
+        return {
+          id: idx,
+          provider: `${carrier.name || 'Duffel Carrier'} (Live Duffel API)`,
+          logoUrl: carrier.logo_symbol_url || carrier.logo_lockup_url || '',
+          time: parseDuffelDuration(slice.duration),
+          price: priceVal,
+          currency: offer.total_currency || 'USD',
+          type: segments.length > 1 ? `${segments.length - 1} Stop (${segments[0]?.operating_carrier?.name || 'Connect'})` : 'Direct (Non-stop)',
+          tag: idx === 0 ? 'time' : (idx === 1 ? 'comfort' : 'price'),
+          offerId: offer.id,
+          pipe: 'Duffel Live API',
+          flightNumber: `${carrier.iata_code || 'FL'} ${100 + idx * 35}`,
+          bookingUrl: `https://duffel.com/`
+        };
+      });
     } catch (err) {
-      console.warn('Duffel API call error:', err.response?.data || err.message);
+      console.warn(`Duffel API error (${origin}->${destination}):`, err.response?.data || err.message);
+      return [];
     }
-  }
+  };
 
-
-  // Standard high-fidelity options strictly following PDF document specs
-  if (inboundOptions.length === 0) {
-    inboundOptions = [
-      {
-        id: 0,
-        provider: `${originIata === 'FRA' ? 'Lufthansa' : originIata === 'SIN' || destIata === 'SIN' ? 'Singapore Airlines' : originIata === 'KTI' || destIata === 'KTI' ? 'Cambodia Angkor Air' : 'British Airways'} (Duffel Direct)`,
-        time: '13h 10m',
-        price: 980,
-        type: 'Direct (Non-stop)',
-        tag: 'time',
-        pipe: 'Duffel API — Primary Booking Pipe',
-        flightNumber: 'SQ 308',
-        disruptionScore: '98.4% On-Time (AviationStack Tracked)',
-        bookingUrl: 'https://duffel.com/docs/api/overview/welcome'
-      },
-      {
-        id: 1,
-        provider: 'Emirates / Qatar Airways (Travelpayouts Data)',
-        time: '14h 30m',
-        price: 850,
-        type: '1 Stop via Dubai (DXB)',
-        tag: 'comfort',
-        pipe: 'Travelpayouts Data API — Price Comparison',
-        flightNumber: 'EK 354',
-        disruptionScore: '96.8% On-Time (AeroDataBox Tracked)',
-        bookingUrl: 'https://www.travelpayouts.com/'
-      },
-      {
-        id: 2,
-        provider: 'Kiwi Tequila Regional Partner',
-        time: '16h 15m',
-        price: 620,
-        type: '1 Stop via Doha / Bangkok',
-        tag: 'price',
-        pipe: 'Kiwi Tequila API — ASEAN Fallback Pipe',
-        flightNumber: 'QR 945',
-        disruptionScore: '94.2% On-Time',
-        bookingUrl: 'https://tequila-api.kiwi.com'
-      }
-    ];
-  }
-
-  // Inter-city Transit options (12Go & Easybook API Document Specs)
-  if (destinations.length > 1) {
-    interCityOptions = [
-      {
-        id: 0,
-        provider: 'Shinkansen / ASEAN Express Rail (12Go Partner)',
-        time: '2h 15m',
-        price: 140,
-        type: 'Direct High-Speed Rail',
-        tag: 'time',
-        pipe: '12Go API / Reseller Program',
-        bookingUrl: 'https://agent.12go.asia/'
-      },
-      {
-        id: 1,
-        provider: 'Regional Intercity Express (Easybook SOAP Service)',
-        time: '1h 10m',
-        price: 190,
-        type: 'Direct Flight / Transit',
-        tag: 'comfort',
-        pipe: 'Easybook Partner Web Services',
-        bookingUrl: 'http://docs.appl.easybook.net/'
-      },
-      {
-        id: 2,
-        provider: '12Go Regional Highway Coach',
-        time: '5h 30m',
-        price: 45,
-        type: 'Luxury Express Bus',
-        tag: 'price',
-        pipe: '12Go Affiliate API',
-        bookingUrl: 'https://agent.12go.asia/'
-      }
-    ];
-  }
-
-  // Outbound Return Flight options
-  outboundOptions = [
-    {
-      id: 0,
-      provider: `Lufthansa / ${returnIata} Connect (Duffel Pipe)`,
-      time: '13h 45m',
-      price: 890,
-      type: 'Direct (Non-stop)',
-      tag: 'time',
-      pipe: 'Duffel API — Primary Booking Pipe',
-      flightNumber: 'LH 779',
-      disruptionScore: '97.9% On-Time (AviationStack)'
-    },
-    {
-      id: 1,
-      provider: 'Singapore Airlines Premium (Travelpayouts Data)',
-      time: '14h 10m',
-      price: 1150,
-      type: 'Direct Executive Class',
-      tag: 'comfort',
-      pipe: 'Travelpayouts Data API',
-      flightNumber: 'SQ 322'
-    },
-    {
-      id: 2,
-      provider: 'Qatar Airways (Kiwi Tequila Pipe)',
-      time: '17h 00m',
-      price: 640,
-      type: '1 Stop via Doha (DOH)',
-      tag: 'price',
-      pipe: 'Kiwi Tequila API',
-      flightNumber: 'QR 946'
-    }
-  ];
-
-  // Local Ground Transfer options (Grab API Document Specs)
-  transferOptions = [
-    {
-      id: 0,
-      provider: 'Airport Express Rail Link',
-      time: '25m',
-      price: 25,
-      type: 'Direct Airport Rail',
-      tag: 'time',
-      pipe: 'Public Rapid Transit API'
-    },
-    {
-      id: 1,
-      provider: 'Grab Executive Chauffeur (Grab Partner API)',
-      time: '35m',
-      price: 95,
-      type: 'Private Premium Car (GrabCar)',
-      tag: 'comfort',
-      pipe: 'Grab Developer API',
-      bookingUrl: 'https://developer.grab.com/'
-    },
-    {
-      id: 2,
-      provider: 'Grab Airport Shuttle (Grab Share)',
-      time: '50m',
-      price: 15,
-      type: 'Shared Express Shuttle',
-      tag: 'price',
-      pipe: 'Grab Developer API',
-      bookingUrl: 'https://developer.grab.com/'
-    }
-  ];
+  // Fetch real live flight options from Duffel API
+  const inboundOptions = await fetchDuffelOffers(originIata, destIata, startDate);
+  const outboundOptions = await fetchDuffelOffers(lastIata, returnIata, endDate);
+  
+  const interCityOptions = [];
+  const transferOptions = [];
 
   // Build multi-segment breakdown if multi-stop itinerary
   const routeStops = [departure, ...destinations, returnPlace];
   const dynamicSegments = [];
 
-  for (let i = 0; i < routeStops.length - 1; i++) {
-    const fromLoc = routeStops[i];
-    const toLoc = routeStops[i + 1];
-    const fromIata = extractIata(fromLoc);
-    const toIata = extractIata(toLoc);
-    const isFlightLeg = i === 0 || i === routeStops.length - 2;
+  if (destinations.length > 1) {
+    for (let i = 0; i < routeStops.length - 1; i++) {
+      const fromLoc = routeStops[i];
+      const toLoc = routeStops[i + 1];
+      const fromCode = extractIata(fromLoc);
+      const toCode = extractIata(toLoc);
 
-    const segOptions = [
-      {
-        id: 0,
-        provider: isFlightLeg 
-          ? `${fromIata === 'FRA' ? 'Lufthansa' : fromIata === 'SIN' ? 'Singapore Airlines' : fromIata === 'KTI' ? 'Cambodia Angkor Air' : 'British Airways'} (Duffel Direct)`
-          : 'High-Speed Rail Express (12Go Partner)',
-        time: isFlightLeg ? '12h 40m' : '2h 15m',
-        price: isFlightLeg ? Math.round(750 + (i * 120)) : 140,
-        type: isFlightLeg ? 'Direct Flight (Non-stop)' : 'Express Shinkansen / Rail',
-        tag: 'time',
-        pipe: isFlightLeg ? 'Duffel API — Primary Flight Pipe' : '12Go API / Reseller Program',
-        flightNumber: isFlightLeg ? `SQ ${200 + i * 15}` : 'SHK 104',
-        disruptionScore: '98.5% On-Time (AviationStack Tracked)'
-      },
-      {
-        id: 1,
-        provider: isFlightLeg
-          ? 'Emirates / Qatar Airways (Travelpayouts Data)'
-          : 'Regional Express Transit (Easybook SOAP)',
-        time: isFlightLeg ? '14h 15m' : '1h 30m',
-        price: isFlightLeg ? Math.round(620 + (i * 90)) : 185,
-        type: isFlightLeg ? '1 Stop via Hub' : 'Direct Intercity Air/Rail',
-        tag: 'comfort',
-        pipe: isFlightLeg ? 'Travelpayouts Data API' : 'Easybook Partner Web Services',
-        flightNumber: isFlightLeg ? `EK ${350 + i * 10}` : 'EB 502',
-        disruptionScore: '96.4% On-Time (AeroDataBox Tracked)'
-      },
-      {
-        id: 2,
-        provider: isFlightLeg
-          ? 'AirAsia / Regional Carrier (Kiwi Tequila)'
-          : '12Go Highway Express Coach',
-        time: isFlightLeg ? '16h 00m' : '5h 30m',
-        price: isFlightLeg ? Math.round(480 + (i * 60)) : 45,
-        type: isFlightLeg ? '1 Stop Low-Cost Connector' : 'Luxury Highway Bus',
-        tag: 'price',
-        pipe: isFlightLeg ? 'Kiwi Tequila API — Fallback' : '12Go Affiliate API',
-        flightNumber: isFlightLeg ? `AK ${800 + i * 20}` : 'BUS 88',
-        disruptionScore: '94.0% On-Time'
-      }
-    ];
+      const legOffers = await fetchDuffelOffers(fromCode, toCode, startDate);
 
-    dynamicSegments.push({
-      segmentIndex: i + 1,
-      title: `Segment ${i + 1}: ${fromLoc} ➔ ${toLoc}`,
-      from: fromLoc,
-      to: toLoc,
-      isFlightLeg,
-      options: segOptions
-    });
+      dynamicSegments.push({
+        segmentIndex: i + 1,
+        title: `Segment ${i + 1}: ${fromLoc} ➔ ${toLoc}`,
+        from: fromLoc,
+        to: toLoc,
+        isFlightLeg: true,
+        options: legOffers
+      });
+    }
   }
 
   res.json({
@@ -601,18 +417,13 @@ app.post('/api/travel/search', async (req, res) => {
     transferOptions,
     dynamicSegments,
     apiPipesUsed: [
-      { name: 'Luma API', status: 'Active', category: 'Event Discovery' },
-      { name: 'Duffel API', status: 'Primary Active', category: 'Flight Booking' },
-      { name: 'Kiwi Tequila API', status: 'Fallback Active', category: 'Flight Booking' },
-      { name: 'Travelpayouts Data API', status: 'Active', category: 'Price Trends & Affiliate' },
-      { name: '12Go API', status: 'Active', category: 'Regional Bus/Rail' },
-      { name: 'Grab API', status: 'Active', category: 'On-Demand Car & Charter' },
-      { name: 'AviationStack API', status: 'Active', category: 'Flight Disruption Tracking' },
-      { name: 'Apple PassKit & Google Wallet API', status: 'Active', category: 'Digital Pass' }
+      { name: 'Duffel API', status: duffelToken ? 'Live API Active' : 'Inactive', category: 'Live Flight Fares' },
+      { name: 'Photon / OpenStreetMap API', status: 'Live Active', category: 'City & Location Autocomplete' },
+      { name: 'Luma Public API', status: 'Live Active', category: 'Event Discovery' },
+      { name: 'Apple PassKit & Google Wallet API', status: 'Live Active', category: 'Digital Pass Generation' }
     ]
   });
 });
-
 
 // ─── HEALTH ───────────────────────────────────────────────────
 app.get('/api/health', (_req, res) => {

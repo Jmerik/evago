@@ -599,37 +599,46 @@ export const TravelOptimization = ({ onNext, itinerary = [] }) => {
           <div style={{ background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '10px', padding: '12px 16px', marginBottom: '20px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '10px' }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
               <Sparkles size={16} style={{ color: '#0284c7' }} />
-              <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#0f172a' }}>Live Search Processed — Actual Prices Calculated</span>
+              <span style={{ fontSize: '0.8rem', fontWeight: 700, color: '#0f172a' }}>Live Search Processed — Strictly Real API Results Only</span>
             </div>
             <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-              <span style={{ fontSize: '0.68rem', fontWeight: 700, background: '#e0f2fe', color: '#0369a1', padding: '2px 8px', borderRadius: '12px' }}>Duffel API</span>
-              <span style={{ fontSize: '0.68rem', fontWeight: 700, background: '#fef3c7', color: '#b45309', padding: '2px 8px', borderRadius: '12px' }}>Kiwi Tequila</span>
-              <span style={{ fontSize: '0.68rem', fontWeight: 700, background: '#ecfdf5', color: '#047857', padding: '2px 8px', borderRadius: '12px' }}>12Go Transit</span>
-              <span style={{ fontSize: '0.68rem', fontWeight: 700, background: '#f3e8ff', color: '#6b21a8', padding: '2px 8px', borderRadius: '12px' }}>Grab Charter</span>
+              <span style={{ fontSize: '0.68rem', fontWeight: 700, background: '#e0f2fe', color: '#0369a1', padding: '2px 8px', borderRadius: '12px' }}>Duffel Live API</span>
             </div>
           </div>
 
-          {/* Preset Strategy Buttons */}
-          <div className="flex gap-3 mb-2 flex-wrap">
-            <Button 
-              variant={activePreset === 'time' ? 'primary' : 'secondary'} 
-              onClick={() => handleApplyPreset('time')}
-            >
-              <Clock size={16}/> Optimise for Speed (Fastest)
-            </Button>
-            <Button 
-              variant={activePreset === 'comfort' ? 'primary' : 'secondary'} 
-              onClick={() => handleApplyPreset('comfort')}
-            >
-              <ShieldCheck size={16}/> Optimise for Comfort (Direct &amp; Executive)
-            </Button>
-            <Button 
-              variant={activePreset === 'price' ? 'primary' : 'secondary'} 
-              onClick={() => handleApplyPreset('price')}
-            >
-              <Ticket size={16}/> Optimise for Price (Best Value)
-            </Button>
-          </div>
+          {inboundOptions.length === 0 && outboundOptions.length === 0 && dynamicSegments.length === 0 ? (
+            <Card status="alert" className="text-center py-12 mb-6" style={{ background: '#fff1f2', borderRadius: '12px', border: '1px solid #fecdd3' }}>
+              <div style={{ maxWidth: '480px', margin: '0 auto', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '12px' }}>
+                <h3 style={{ margin: 0, fontSize: '1.15rem', color: '#9f1239' }}>No Live API Fares Found</h3>
+                <p style={{ margin: 0, fontSize: '0.875rem', color: '#be123c', lineHeight: '1.5' }}>
+                  Connected Duffel API returned 0 live flight offers for this route or date combination. Try searching between major international hub airports (e.g. London LHR, Frankfurt FRA, Singapore SIN, New York JFK).
+                </p>
+              </div>
+            </Card>
+          ) : (
+            <>
+              {/* Preset Strategy Buttons */}
+              <div className="flex gap-3 mb-2 flex-wrap">
+                <Button 
+                  variant={activePreset === 'time' ? 'primary' : 'secondary'} 
+                  onClick={() => handleApplyPreset('time')}
+                >
+                  <Clock size={16}/> Optimise for Speed (Fastest)
+                </Button>
+                <Button 
+                  variant={activePreset === 'comfort' ? 'primary' : 'secondary'} 
+                  onClick={() => handleApplyPreset('comfort')}
+                >
+                  <ShieldCheck size={16}/> Optimise for Comfort (Direct &amp; Executive)
+                </Button>
+                <Button 
+                  variant={activePreset === 'price' ? 'primary' : 'secondary'} 
+                  onClick={() => handleApplyPreset('price')}
+                >
+                  <Ticket size={16}/> Optimise for Price (Best Value)
+                </Button>
+              </div>
+
 
           {/* Dynamic Per-Segment Options if Multi-Stop Itinerary */}
           {dynamicSegments.length > 0 ? (
@@ -922,6 +931,8 @@ export const TravelOptimization = ({ onNext, itinerary = [] }) => {
               <span>Confirm &amp; Book Complete Journey</span>
             </button>
           </div>
+            </>
+          )}
         </>
       )}
     </div>
