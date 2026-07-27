@@ -6,12 +6,14 @@ import { TravelPass } from './TravelPass';
 import { CharterTransport } from './CharterTransport';
 import { evagoApi } from '../services/api';
 
+import { Footer } from '../components/Footer';
+
 export const Dashboard = () => {
   const [currentView, setCurrentView] = useState('discovery');
   const [itinerary, setItinerary] = useState([]);
   const [selectedBooking, setSelectedBooking] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
-
+  
   // Load latest travel pass on mount to restore session state
   useEffect(() => {
     const fetchLatestPass = async () => {
@@ -92,13 +94,16 @@ export const Dashboard = () => {
   };
 
   return (
-    <div className="min-h-screen">
-      <Navigation currentView={currentView} onViewChange={setCurrentView} />
-      <main className="main-content">
-        <div className="container">
-          {renderView()}
-        </div>
-      </main>
+    <div className="min-h-screen flex flex-col justify-between">
+      <div>
+        <Navigation currentView={currentView} onViewChange={setCurrentView} />
+        <main className="main-content">
+          <div className="container">
+            {renderView()}
+          </div>
+        </main>
+      </div>
+      <Footer />
     </div>
   );
 };

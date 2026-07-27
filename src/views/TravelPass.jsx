@@ -21,7 +21,17 @@ export const TravelPass = ({ onNext, itinerary = [], booking }) => {
       <div className="flex justify-center mb-6">
         <Card status="premium" className="w-full max-w-sm text-center">
           <div className="mb-6 flex justify-between items-center w-full">
-             <div className="text-primary font-bold tracking-wider">EVAGO PASS</div>
+             <div className="flex items-center gap-2">
+               <img 
+                 src="/images/evago_logo.jpg" 
+                 alt="EVAGO Logo" 
+                 style={{ height: '24px', width: 'auto', borderRadius: '3px', objectFit: 'contain' }}
+                 onError={(e) => { e.target.style.display = 'none'; }}
+               />
+               <span className="text-primary font-bold tracking-wider" style={{ fontFamily: 'var(--font-header)', fontSize: '0.9rem' }}>
+                 EVAGO PASS
+               </span>
+             </div>
              <Badge status="success">Active Pass</Badge>
           </div>
           
