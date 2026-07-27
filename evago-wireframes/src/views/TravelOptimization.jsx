@@ -2,11 +2,17 @@ import React, { useState } from 'react';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { Badge } from '../components/Badge';
-import { Plane, Bus, Clock, ShieldCheck, Ticket, MapPin } from 'lucide-react';
+import { Plane, Bus, Clock, ShieldCheck, Ticket, MapPin, Calendar } from 'lucide-react';
 
-export const TravelOptimization = ({ onNext }) => {
+export const TravelOptimization = ({ onNext, itinerary = [] }) => {
   const [activeTab, setActiveTab] = useState('time');
   const [departure, setDeparture] = useState('London (LHR)');
+  
+  // Extract destination city from itinerary if available
+  const primaryCity = itinerary.length > 0 && itinerary[0]?.venue?.city 
+    ? itinerary[0].venue.city 
+    : 'Singapore';
+
   const [returnPlace, setReturnPlace] = useState('London (LHR)');
 
   // State for selected segments
@@ -16,13 +22,25 @@ export const TravelOptimization = ({ onNext }) => {
   const flightOptions = [
     { id: 0, provider: 'British Airways', time: '14h 30m', price: 850, type: 'Direct', timeMatch: true },
     { id: 1, provider: 'Emirates', time: '16h 15m', price: 620, type: '1 Stop', timeMatch: false },
+    { id: 2, provider: 'Singapore Airlines', time: '13h 10m', price: 980, type: 'Direct (Non-stop)', timeMatch: true },
   ];
 
   const transferOptions = [
     { id: 0, provider: 'Premium Private Car', time: '25m', price: 80, comfortMatch: true },
-    { id: 1, provider: 'Shared Shuttle', time: '45m', price: 15, comfortMatch: false },
-    { id: 2, provider: 'Airport Express Train', time: '30m', price: 25, priceMatch: true },
+    { id: 1, provider: 'Shared Airport Shuttle', time: '45m', price: 15, comfortMatch: false },
+    { id: 2, provider: 'Airport Express Rail', time: '30m', price: 25, priceMatch: true },
   ];
+
+  const handleConfirm = () => {
+    onNext({
+      departure,
+      destination: primaryCity,
+      returnPlace,
+      flight: flightOptions[selectedFlight],
+      transfer: transferOptions[selectedTransfer],
+      totalCost: flightOptions[selectedFlight].price + transferOptions[selectedTransfer].price
+    });
+  };
 
   return (
     <div className="flex-col gap-6">
@@ -30,6 +48,24 @@ export const TravelOptimization = ({ onNext }) => {
         <h2>Travel Optimisation</h2>
         <p className="text-body mt-2">Customise your travel segments and set your departure locations.</p>
       </div>
+
+      {/* Itinerary Context Banner */}
+      {itinerary.length > 0 && (
+        <Card status="premium" className="mb-6 bg-[var(--color-surface)]">
+          <div className="flex justify-between items-center">
+            <div>
+              <div className="text-caption font-semibold text-primary">DESTINATION & EVENTS</div>
+              <h3 className="text-primary mt-1">{primaryCity}</h3>
+              <p className="text-caption mt-1">Optimising travel for {itinerary.length} selected item{itinerary.length > 1 ? 's' : ''}</p>
+            </div>
+            <div className="flex gap-2">
+              {itinerary.map(item => (
+                <Badge key={item.id} status="default">{item.name}</Badge>
+              ))}
+            </div>
+          </div>
+        </Card>
+      )}
 
       <Card status="standard" className="mb-6">
         <h3 className="mb-4">Trip Details</h3>
@@ -87,7 +123,7 @@ export const TravelOptimization = ({ onNext }) => {
       <div className="flex-col gap-6">
         {/* Segment 1: Flight */}
         <div className="flex-col gap-2">
-          <h4 className="text-secondary mb-2">Segment 1: Inbound Flight to Singapore</h4>
+          <h4 className="text-secondary mb-2">Segment 1: Inbound Flight to {primaryCity}</h4>
           {flightOptions.map(option => (
             <Card 
               key={option.id} 
@@ -117,7 +153,7 @@ export const TravelOptimization = ({ onNext }) => {
 
         {/* Segment 2: Transfer */}
         <div className="flex-col gap-2 mt-4">
-          <h4 className="text-secondary mb-2">Segment 2: Airport to Hotel Transfer</h4>
+          <h4 className="text-secondary mb-2">Segment 2: Airport to Hotel Transfer ({primaryCity})</h4>
           {transferOptions.map(option => (
             <Card 
               key={option.id} 
@@ -153,7 +189,7 @@ export const TravelOptimization = ({ onNext }) => {
               ${flightOptions[selectedFlight].price + transferOptions[selectedTransfer].price}
             </div>
           </div>
-          <Button variant="primary" onClick={onNext}>Confirm & Book Journey</Button>
+          <Button variant="primary" onClick={handleConfirm}>Confirm & Book Journey</Button>
         </div>
       </div>
     </div>

@@ -144,10 +144,7 @@ export const EventDiscovery = ({ onNext }) => {
     
     // Clear itinerary and use only this trip
     setItinerary([privateTripEvent]);
-    // Immediately proceed to planning
-    setTimeout(() => {
-      onNext();
-    }, 100);
+    onNext([privateTripEvent]);
   };
 
   const toggleItinerary = (event) => {
@@ -592,7 +589,7 @@ export const EventDiscovery = ({ onNext }) => {
         <div className="mt-8 pt-6 border-t border-[var(--color-card-border)]">
           <div className="flex justify-between items-center mb-4">
             <h3>Your Itinerary ({itinerary.length})</h3>
-            <Button variant="primary" onClick={onNext}>
+            <Button variant="primary" onClick={() => onNext(itinerary)}>
               Plan Travel for {itinerary.length} Events <ArrowRight size={16} />
             </Button>
           </div>

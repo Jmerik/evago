@@ -7,19 +7,52 @@ import { CharterTransport } from './CharterTransport';
 
 export const Dashboard = () => {
   const [currentView, setCurrentView] = useState('discovery');
+  const [itinerary, setItinerary] = useState([]);
+  const [selectedBooking, setSelectedBooking] = useState(null);
+
+  const handleProceedFromDiscovery = (selectedEvents) => {
+    setItinerary(selectedEvents || []);
+    setCurrentView('optimization');
+  };
+
+  const handleProceedFromOptimization = (bookingDetails) => {
+    setSelectedBooking(bookingDetails);
+    setCurrentView('travelpass');
+  };
 
   const renderView = () => {
     switch (currentView) {
       case 'discovery':
-        return <EventDiscovery onNext={() => setCurrentView('optimization')} />;
+        return (
+          <EventDiscovery 
+            onNext={handleProceedFromDiscovery} 
+            initialItinerary={itinerary}
+          />
+        );
       case 'optimization':
-        return <TravelOptimization onNext={() => setCurrentView('travelpass')} />;
+        return (
+          <TravelOptimization 
+            onNext={handleProceedFromOptimization} 
+            itinerary={itinerary}
+          />
+        );
       case 'travelpass':
-        return <TravelPass onNext={() => setCurrentView('charter')} />;
+        return (
+          <TravelPass 
+            onNext={() => setCurrentView('charter')} 
+            itinerary={itinerary}
+            booking={selectedBooking}
+          />
+        );
       case 'charter':
-        return <CharterTransport />;
+        return <CharterTransport itinerary={itinerary} />;
       default:
-        return <EventDiscovery onNext={() => setCurrentView('optimization')} />;
+        return (
+          <EventDiscovery 
+            onNext={handleProceedFromDiscovery} 
+            initialItinerary={itinerary}
+          />
+        );
     }
   };
 
