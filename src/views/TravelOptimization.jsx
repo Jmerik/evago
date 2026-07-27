@@ -328,9 +328,26 @@ export const TravelOptimization = ({ onNext, itinerary = [] }) => {
               <p className="text-caption mt-1">Optimising travel for {itinerary.length} selected stop{itinerary.length > 1 ? 's' : ''}</p>
             </div>
             <div className="flex gap-2 flex-wrap">
-              {stops.map((stop, i) => (
-                <Badge key={i} status="default">Stop {i + 1}: {stop}</Badge>
-              ))}
+              {itinerary.map((item, i) => {
+                const stopName = item.venue?.city || item.name.replace(/^Trip to /, '');
+                const hasDate = item.scheduledDate || item.startAt;
+                let dateStr = '';
+                if (hasDate) {
+                  const d = new Date(item.startAt || item.scheduledDate);
+                  if (!isNaN(d)) dateStr = d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+                }
+                const timeStr = item.scheduledTime || (item.startAt && item.startAt.includes('T') && !item.startAt.includes('T00:00') ? item.startAt.split('T')[1].slice(0, 5) : '');
+                return (
+                  <Badge key={i} status="default" style={{ padding: '6px 12px', fontSize: '0.8rem' }}>
+                    <span style={{ fontWeight: 700 }}>Stop {i + 1}: {stopName}</span>
+                    {(dateStr || timeStr) && (
+                      <span style={{ color: '#0284c7', marginLeft: '6px', fontWeight: 600 }}>
+                        ({[dateStr, timeStr].filter(Boolean).join(' @ ')})
+                      </span>
+                    )}
+                  </Badge>
+                );
+              })}
             </div>
           </div>
         </Card>
