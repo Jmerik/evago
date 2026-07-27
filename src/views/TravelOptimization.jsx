@@ -922,11 +922,21 @@ export const TravelOptimization = ({ onNext, itinerary = [] }) => {
                 const selectedOptIdx = selectedSegmentOptions[seg.segmentIndex] || 0;
                 return (
                   <div key={seg.segmentIndex} className="flex-col gap-2">
-                    <h4 className="text-secondary mb-1" style={{ fontSize: '1rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    <h4 className="text-secondary mb-1" style={{ fontSize: '1rem', fontWeight: 600, display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
                       <span style={{ width: '22px', height: '22px', borderRadius: '50%', background: '#0284c7', color: '#fff', fontSize: '11px', fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                         {seg.segmentIndex}
                       </span>
                       {seg.title}
+                      {seg.departDate && (
+                        <span style={{ fontSize: '0.7rem', fontWeight: 600, color: '#0369a1', background: '#e0f2fe', padding: '2px 8px', borderRadius: '10px' }}>
+                          Depart {seg.departDate}
+                        </span>
+                      )}
+                      {seg.arriveBy && (
+                        <span style={{ fontSize: '0.7rem', fontWeight: 600, color: '#7c2d12', background: '#fef3c7', padding: '2px 8px', borderRadius: '10px' }}>
+                          Arrive by {String(seg.arriveBy).replace('T', ' ').slice(0, 16)}
+                        </span>
+                      )}
                     </h4>
 
                     {seg.options.map((option) => (
@@ -936,30 +946,49 @@ export const TravelOptimization = ({ onNext, itinerary = [] }) => {
                         className="cursor-pointer transition-all hover-border-primary mb-2"
                         onClick={() => setSelectedSegmentOptions(prev => ({ ...prev, [seg.segmentIndex]: option.id }))}
                       >
-                        <div className="flex justify-between items-center">
+                        <div className="flex justify-between items-center flex-wrap gap-4">
                           <div className="flex items-center gap-4">
-                            {seg.isFlightLeg ? <Plane size={22} style={{ color: '#0284c7' }} /> : <Train size={22} style={{ color: '#0284c7' }} />}
+                            {option.logoUrl ? (
+                              <img src={option.logoUrl} alt={option.provider} style={{ width: '28px', height: '28px', objectFit: 'contain' }} />
+                            ) : seg.isFlightLeg ? (
+                              <Plane size={24} style={{ color: '#0284c7' }} />
+                            ) : (
+                              <Train size={24} style={{ color: '#0284c7' }} />
+                            )}
                             <div>
-                              <div className="font-semibold text-primary">{option.provider}</div>
-                              <div className="text-caption mt-0.5 flex items-center gap-2 flex-wrap" style={{ fontSize: '0.75rem' }}>
-                                <span>{option.type} &bull; {option.time}</span>
+                              <div className="font-semibold text-primary" style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                <span>{option.provider}</span>
+                                {option.flightNumber && (
+                                  <span style={{ fontSize: '0.72rem', background: '#f1f5f9', color: '#475569', padding: '1px 6px', borderRadius: '4px', fontWeight: 700 }}>
+                                    {option.flightNumber}
+                                  </span>
+                                )}
                                 {option.pipe && (
                                   <span style={{ fontSize: '0.68rem', fontWeight: 600, color: '#0284c7', background: '#e0f2fe', padding: '1px 6px', borderRadius: '4px' }}>
                                     {option.pipe}
                                   </span>
                                 )}
-                                {option.disruptionScore && (
-                                  <span style={{ fontSize: '0.68rem', fontWeight: 500, color: '#059669', background: '#ecfdf5', padding: '1px 6px', borderRadius: '4px' }}>
-                                    {option.disruptionScore}
+                              </div>
+                              <div className="text-caption mt-1 flex items-center gap-3 flex-wrap" style={{ fontSize: '0.8rem', color: '#334155' }}>
+                                {(option.departureTime || option.arrivalTime) && (
+                                  <span style={{ fontWeight: 600, color: '#0f172a' }}>
+                                    🛫 {option.departureTime || 'TBA'} ({option.originIata || '—'}) ➔ 🛬 {option.arrivalTime || 'TBA'} ({option.destIata || '—'})
                                   </span>
+                                )}
+                                {option.departureDate && <span>&bull; {option.departureDate}</span>}
+                                <span>&bull; {option.type} ({option.time})</span>
+                                {typeof option.stops === 'number' && (
+                                  <span>&bull; {option.stops === 0 ? 'Direct (Non-stop)' : `${option.stops} stop${option.stops > 1 ? 's' : ''}`}</span>
                                 )}
                               </div>
                             </div>
                           </div>
 
-                          <div className="flex items-center gap-6">
+                          <div className="flex items-center gap-4">
                             {option.tag === activePreset && <Badge status="live">Recommended</Badge>}
-                            <div className="text-price" style={{ color: '#0f172a', fontWeight: 700 }}>${option.price}</div>
+                            <div className="text-price" style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0f172a' }}>
+                              ${option.price}
+                            </div>
                             <div style={{
                               width: '24px', height: '24px', borderRadius: '50%', flexShrink: 0,
                               border: selectedOptIdx === option.id ? '2px solid #059669' : '2px solid #cbd5e1',
@@ -983,30 +1012,33 @@ export const TravelOptimization = ({ onNext, itinerary = [] }) => {
                   Segment {dynamicSegments.length + 1}: Local Destination Ground Transfer ({firstStop})
                 </h4>
                 {transferOptions.map(option => (
-                  <Card 
-                    key={option.id} 
+                  <Card
+                    key={option.id}
                     status={selectedTransfer === option.id ? 'success' : 'standard'}
                     className="cursor-pointer transition-all hover-border-primary mb-2"
                     onClick={() => setSelectedTransfer(option.id)}
                   >
-                    <div className="flex justify-between items-center">
+                    <div className="flex justify-between items-center flex-wrap gap-4">
                       <div className="flex items-center gap-4">
-                        <Bus size={22} style={{ color: '#0284c7' }} />
+                        <Bus size={24} style={{ color: '#0284c7' }} />
                         <div>
-                          <div className="font-semibold text-primary">{option.provider}</div>
-                          <div className="text-caption mt-0.5 flex items-center gap-2" style={{ fontSize: '0.75rem' }}>
-                            <span>{option.type} &bull; {option.time}</span>
+                          <div className="font-semibold text-primary" style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                            <span>{option.provider}</span>
                             {option.pipe && (
                               <span style={{ fontSize: '0.68rem', fontWeight: 600, color: '#0284c7', background: '#e0f2fe', padding: '1px 6px', borderRadius: '4px' }}>
                                 {option.pipe}
                               </span>
                             )}
                           </div>
+                          <div className="text-caption mt-1 flex items-center gap-3 flex-wrap" style={{ fontSize: '0.8rem', color: '#334155' }}>
+                            <span style={{ fontWeight: 600, color: '#0f172a' }}>Local Transfer ({firstStop})</span>
+                            <span>&bull; {option.type} ({option.time})</span>
+                          </div>
                         </div>
                       </div>
-                      <div className="flex items-center gap-6">
+                      <div className="flex items-center gap-4">
                         {option.tag === activePreset && <Badge status="live">Recommended</Badge>}
-                        <div className="text-price">${option.price}</div>
+                        <div className="text-price" style={{ fontSize: '1.25rem', fontWeight: 700, color: '#0f172a' }}>${option.price}</div>
                         <div style={{
                           width: '24px', height: '24px', borderRadius: '50%', flexShrink: 0,
                           border: selectedTransfer === option.id ? '2px solid #059669' : '2px solid #cbd5e1',
