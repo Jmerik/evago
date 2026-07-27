@@ -43,9 +43,28 @@ export const EventDiscovery = ({ onNext }) => {
   const [destLoading, setDestLoading] = useState(false);
   const [destDropdownOpen, setDestDropdownOpen] = useState(false);
   const [destHighlight, setDestHighlight] = useState(-1);
+  const [destRect, setDestRect] = useState({ top: 0, left: 0, width: 0 });
   const destDebounceRef = useRef(null);
   const destInputRef = useRef(null);
   const destDropdownRef = useRef(null);
+
+  const updateDestRect = useCallback(() => {
+    if (destInputRef.current) {
+      const r = destInputRef.current.getBoundingClientRect();
+      setDestRect({ top: r.bottom + window.scrollY, left: r.left + window.scrollX, width: r.width });
+    }
+  }, []);
+
+  // Reposition dropdown on scroll or resize
+  useEffect(() => {
+    if (!destDropdownOpen) return;
+    window.addEventListener('scroll', updateDestRect, true);
+    window.addEventListener('resize', updateDestRect);
+    return () => {
+      window.removeEventListener('scroll', updateDestRect, true);
+      window.removeEventListener('resize', updateDestRect);
+    };
+  }, [destDropdownOpen, updateDestRect]);
 
   const fetchDestinationSuggestions = useCallback((query) => {
     if (destDebounceRef.current) clearTimeout(destDebounceRef.current);
@@ -76,7 +95,12 @@ export const EventDiscovery = ({ onNext }) => {
           .filter((s, idx, arr) => s.display && arr.findIndex(x => x.display === s.display) === idx)
           .slice(0, 6);
         setDestSuggestions(suggestions);
-        setDestDropdownOpen(suggestions.length > 0);
+        if (suggestions.length > 0) {
+          updateDestRect();
+          setDestDropdownOpen(true);
+        } else {
+          setDestDropdownOpen(false);
+        }
         setDestHighlight(-1);
       } catch (err) {
         console.error('Destination autocomplete error:', err);
@@ -112,7 +136,7 @@ export const EventDiscovery = ({ onNext }) => {
     const handleClick = (e) => {
       if (
         destInputRef.current && !destInputRef.current.contains(e.target) &&
-        destDropdownRef.current && !destDropdownRef.current.contains(e.target)
+        (!destDropdownRef.current || !destDropdownRef.current.contains(e.target))
       ) {
         setDestDropdownOpen(false);
       }
@@ -342,18 +366,17 @@ export const EventDiscovery = ({ onNext }) => {
                   <ul
                     ref={destDropdownRef}
                     style={{
-                      position: 'absolute',
-                      top: '100%',
-                      left: 0,
-                      right: 0,
-                      marginTop: '4px',
-                      zIndex: 9999,
-                      background: '#fff',
-                      border: '1px solid #e2e8f0',
+                      position: 'fixed',
+                      top: destRect.top + 4,
+                      left: destRect.left,
+                      width: destRect.width,
+                      zIndex: 99999,
+                      background: '#ffffff',
+                      border: '1px solid #cbd5e1',
                       borderRadius: '8px',
-                      boxShadow: '0 10px 30px rgba(0,0,0,0.15)',
+                      boxShadow: '0 12px 32px rgba(0,0,0,0.18)',
                       listStyle: 'none',
-                      margin: '4px 0 0',
+                      margin: 0,
                       padding: '4px 0',
                       maxHeight: '240px',
                       overflowY: 'auto',
@@ -375,12 +398,13 @@ export const EventDiscovery = ({ onNext }) => {
                           display: 'flex',
                           alignItems: 'center',
                           gap: '8px',
-                          backgroundColor: destHighlight === idx ? '#f0f4ff' : 'transparent',
-                          color: '#1a1a2e',
+                          backgroundColor: destHighlight === idx ? '#eff6ff' : '#ffffff',
+                          color: '#111827',
                           fontSize: '14px',
+                          lineHeight: '1.4',
                         }}
                       >
-                        <MapPin size={13} style={{ flexShrink: 0, color: '#4f6ef7' }} />
+                        <MapPin size={13} style={{ flexShrink: 0, color: '#3b82f6' }} />
                         <span>{s.display}</span>
                       </li>
                     ))}
