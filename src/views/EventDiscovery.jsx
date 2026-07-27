@@ -76,24 +76,8 @@ export const EventDiscovery = ({ onNext }) => {
     destDebounceRef.current = setTimeout(async () => {
       setDestLoading(true);
       try {
-        const res = await fetch(
-          `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&limit=6&lang=en`,
-        );
-        const data = await res.json();
-        const suggestions = (data.features || [])
-          .map(f => {
-            const p = f.properties || {};
-            const name = p.name || '';
-            const city = p.city || p.county || '';
-            const state = p.state || '';
-            const country = p.country || '';
-            // Build a clean "City, Country" string
-            const parts = [name, city !== name ? city : '', country].filter(Boolean);
-            const display = [...new Set(parts)].join(', ');
-            return { display, lat: f.geometry?.coordinates?.[1], lon: f.geometry?.coordinates?.[0] };
-          })
-          .filter((s, idx, arr) => s.display && arr.findIndex(x => x.display === s.display) === idx)
-          .slice(0, 6);
+        const data = await evagoApi.autocompleteDestinations(query);
+        const suggestions = (data.suggestions || []).slice(0, 6);
         setDestSuggestions(suggestions);
         if (suggestions.length > 0) {
           updateDestRect();
@@ -110,7 +94,7 @@ export const EventDiscovery = ({ onNext }) => {
         setDestLoading(false);
       }
     }, 300);
-  }, []);
+  }, [updateDestRect]);
 
   const handleDestKeyDown = (e) => {
     if (!destDropdownOpen || destSuggestions.length === 0) return;

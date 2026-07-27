@@ -206,6 +206,31 @@ app.get('/api/itinerary/pass', (req, res) => {
   res.json({ success: true, pass });
 });
 
+// ─── DESTINATION AUTOCOMPLETE (proxy to Photon) ──────────────
+app.get('/api/autocomplete/destinations', async (req, res) => {
+  const q = req.query.q || '';
+  if (q.length < 2) return res.json({ suggestions: [] });
+  try {
+    const { data } = await axios.get('https://photon.komoot.io/api/', {
+      params: { q, limit: 6, lang: 'en' },
+      timeout: 4000,
+    });
+    const suggestions = (data.features || []).map(f => {
+      const p = f.properties || {};
+      const name = p.name || '';
+      const city = p.city || p.county || '';
+      const country = p.country || '';
+      const parts = [name, city !== name ? city : '', country].filter(Boolean);
+      const display = [...new Set(parts)].join(', ');
+      return { display, lat: f.geometry?.coordinates?.[1], lon: f.geometry?.coordinates?.[0] };
+    }).filter((s, i, a) => s.display && a.findIndex(x => x.display === s.display) === i);
+    res.json({ suggestions });
+  } catch (err) {
+    console.error('Autocomplete proxy error:', err.message);
+    res.json({ suggestions: [] });
+  }
+});
+
 // ─── HEALTH ───────────────────────────────────────────────────
 app.get('/api/health', (_req, res) => {
   res.json({ status: 'ok' });

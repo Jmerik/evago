@@ -98,4 +98,17 @@ export const evagoApi = {
     }
     return response.json();
   },
+
+  /**
+   * Autocomplete destination cities
+   */
+  async autocompleteDestinations(query) {
+    const url = new URL(`${API_BASE_URL}/autocomplete/destinations`, window.location.origin);
+    url.searchParams.append('q', query);
+    const response = await fetch(url.toString());
+    if (!response.ok) {
+      return { suggestions: [] };
+    }
+    return response.json();
+  },
 };
