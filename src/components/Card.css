@@ -5,6 +5,7 @@
   padding: 24px;
   display: flex;
   flex-direction: column;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease, transform 0.15s ease;
 }
 
 .card-standard {
@@ -12,13 +13,22 @@
 }
 
 .card-success {
-  border-left: 3px solid var(--color-success);
+  border: 2px solid var(--color-success);
+  background-color: var(--color-success-surface);
+  box-shadow: 0 2px 12px rgba(5, 150, 105, 0.1);
 }
 
 .card-alert {
   border-left: 3px solid var(--color-alert);
+  background-color: var(--color-alert-surface);
 }
 
 .card-premium {
   border-left: 3px solid var(--color-premium);
 }
+
+.card-live {
+  border-left: 3px solid var(--color-live);
+  background-color: var(--color-live-surface);
+}
+

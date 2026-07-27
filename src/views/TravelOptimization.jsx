@@ -218,14 +218,22 @@ export const TravelOptimization = ({ onNext, itinerary = [] }) => {
       )}
 
       {/* Trip Details & Travel Dates */}
-      <Card status="standard" className="mb-6">
-        <h3 className="mb-4">Trip Locations & Travel Dates</h3>
-        <div className="grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px' }}>
+      <Card status="standard" className="mb-6" style={{ borderRadius: '12px', border: '1px solid #e2e8f0', boxShadow: '0 4px 16px rgba(15, 23, 42, 0.04)' }}>
+        <h3 className="mb-1" style={{ fontSize: '1.2rem', color: '#0f172a' }}>Trip Locations & Travel Dates</h3>
+        <p style={{ fontSize: '0.875rem', color: '#64748b', marginBottom: '20px' }}>
+          Select or type your origin and return hubs, and choose your travel dates.
+        </p>
+
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: '20px' }}>
           {/* Departure Input */}
-          <div className="flex-col gap-2" style={{ position: 'relative' }}>
-            <label className="text-caption font-semibold text-primary">Departure Location *</label>
-            <div className="flex items-center gap-2 p-3 border border-[var(--color-card-border)] rounded-md bg-white">
-              <MapPin size={16} className="text-tertiary" />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', position: 'relative' }}>
+            <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              Departure Location *
+            </label>
+            <div style={{ position: 'relative' }}>
+              <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#0284c7', display: 'flex', pointerEvents: 'none' }}>
+                <MapPin size={18} />
+              </span>
               <input 
                 type="text" 
                 value={departure} 
@@ -234,16 +242,51 @@ export const TravelOptimization = ({ onNext, itinerary = [] }) => {
                   fetchDepSuggestions(e.target.value);
                 }} 
                 onFocus={() => { if (depSuggestions.length > 0) setDepDropdownOpen(true); }}
-                className="w-full border-none outline-none text-primary bg-transparent font-medium"
+                style={{
+                  width: '100%',
+                  padding: '12px 14px 12px 38px',
+                  border: '1.5px solid #cbd5e1',
+                  borderRadius: '8px',
+                  outline: 'none',
+                  fontSize: '0.95rem',
+                  fontWeight: 600,
+                  color: '#0f172a',
+                  background: '#ffffff',
+                  boxSizing: 'border-box'
+                }}
                 placeholder="e.g. London Heathrow (LHR)"
               />
-              {depLoading && <Loader2 size={14} className="animate-spin text-tertiary" />}
+              {depLoading && <Loader2 size={15} className="animate-spin" style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: '#0284c7' }} />}
             </div>
+
+            {/* Quick Location Pills for Departure */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '4px' }}>
+              {['London (LHR)', 'Frankfurt (FRA)', 'Singapore (SIN)', 'New York (JFK)', 'Tokyo (HND)'].map(hub => (
+                <button
+                  key={hub}
+                  type="button"
+                  onClick={() => setDeparture(hub)}
+                  style={{
+                    padding: '3px 8px',
+                    borderRadius: '12px',
+                    border: '1px solid #e2e8f0',
+                    background: departure === hub ? '#e0f2fe' : '#f8fafc',
+                    color: departure === hub ? '#0369a1' : '#64748b',
+                    fontSize: '0.75rem',
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                >
+                  {hub}
+                </button>
+              ))}
+            </div>
+
             {depDropdownOpen && depSuggestions.length > 0 && (
               <ul style={{
                 position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100,
-                background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '6px',
-                boxShadow: '0 8px 24px rgba(0,0,0,0.12)', listStyle: 'none', margin: '4px 0 0', padding: '4px 0'
+                background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '8px',
+                boxShadow: '0 10px 30px rgba(15, 23, 42, 0.15)', listStyle: 'none', margin: '4px 0 0', padding: '6px 0'
               }}>
                 {depSuggestions.map((s, idx) => (
                   <li 
@@ -253,10 +296,12 @@ export const TravelOptimization = ({ onNext, itinerary = [] }) => {
                       setDeparture(s.display);
                       setDepDropdownOpen(false);
                     }}
-                    style={{ padding: '8px 12px', cursor: 'pointer', fontSize: '0.875rem' }}
-                    className="hover:bg-blue-50"
+                    style={{ padding: '10px 14px', cursor: 'pointer', fontSize: '0.875rem', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#ffffff', transition: 'background-color 0.15s' }}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f0f9ff'}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#ffffff'}
                   >
-                    {s.display}
+                    <MapPin size={14} style={{ color: '#0284c7' }} />
+                    <span>{s.display}</span>
                   </li>
                 ))}
               </ul>
@@ -264,10 +309,14 @@ export const TravelOptimization = ({ onNext, itinerary = [] }) => {
           </div>
 
           {/* Return Input */}
-          <div className="flex-col gap-2" style={{ position: 'relative' }}>
-            <label className="text-caption font-semibold text-primary">Return Location *</label>
-            <div className="flex items-center gap-2 p-3 border border-[var(--color-card-border)] rounded-md bg-white">
-              <MapPin size={16} className="text-tertiary" />
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', position: 'relative' }}>
+            <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              Return Location *
+            </label>
+            <div style={{ position: 'relative' }}>
+              <span style={{ position: 'absolute', left: '12px', top: '50%', transform: 'translateY(-50%)', color: '#0284c7', display: 'flex', pointerEvents: 'none' }}>
+                <MapPin size={18} />
+              </span>
               <input 
                 type="text" 
                 value={returnPlace} 
@@ -276,16 +325,51 @@ export const TravelOptimization = ({ onNext, itinerary = [] }) => {
                   fetchRetSuggestions(e.target.value);
                 }}
                 onFocus={() => { if (retSuggestions.length > 0) setRetDropdownOpen(true); }}
-                className="w-full border-none outline-none text-primary bg-transparent font-medium"
+                style={{
+                  width: '100%',
+                  padding: '12px 14px 12px 38px',
+                  border: '1.5px solid #cbd5e1',
+                  borderRadius: '8px',
+                  outline: 'none',
+                  fontSize: '0.95rem',
+                  fontWeight: 600,
+                  color: '#0f172a',
+                  background: '#ffffff',
+                  boxSizing: 'border-box'
+                }}
                 placeholder="e.g. London Heathrow (LHR)"
               />
-              {retLoading && <Loader2 size={14} className="animate-spin text-tertiary" />}
+              {retLoading && <Loader2 size={15} className="animate-spin" style={{ position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)', color: '#0284c7' }} />}
             </div>
+
+            {/* Quick Location Pills for Return */}
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '4px' }}>
+              {['London (LHR)', 'Frankfurt (FRA)', 'Singapore (SIN)', 'New York (JFK)', 'Tokyo (HND)'].map(hub => (
+                <button
+                  key={hub}
+                  type="button"
+                  onClick={() => setReturnPlace(hub)}
+                  style={{
+                    padding: '3px 8px',
+                    borderRadius: '12px',
+                    border: '1px solid #e2e8f0',
+                    background: returnPlace === hub ? '#e0f2fe' : '#f8fafc',
+                    color: returnPlace === hub ? '#0369a1' : '#64748b',
+                    fontSize: '0.75rem',
+                    fontWeight: 600,
+                    cursor: 'pointer'
+                  }}
+                >
+                  {hub}
+                </button>
+              ))}
+            </div>
+
             {retDropdownOpen && retSuggestions.length > 0 && (
               <ul style={{
                 position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 100,
-                background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '6px',
-                boxShadow: '0 8px 24px rgba(0,0,0,0.12)', listStyle: 'none', margin: '4px 0 0', padding: '4px 0'
+                background: '#ffffff', border: '1px solid #cbd5e1', borderRadius: '8px',
+                boxShadow: '0 10px 30px rgba(15, 23, 42, 0.15)', listStyle: 'none', margin: '4px 0 0', padding: '6px 0'
               }}>
                 {retSuggestions.map((s, idx) => (
                   <li 
@@ -295,10 +379,12 @@ export const TravelOptimization = ({ onNext, itinerary = [] }) => {
                       setReturnPlace(s.display);
                       setRetDropdownOpen(false);
                     }}
-                    style={{ padding: '8px 12px', cursor: 'pointer', fontSize: '0.875rem' }}
-                    className="hover:bg-blue-50"
+                    style={{ padding: '10px 14px', cursor: 'pointer', fontSize: '0.875rem', color: '#0f172a', display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#ffffff', transition: 'background-color 0.15s' }}
+                    onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#f0f9ff'}
+                    onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#ffffff'}
                   >
-                    {s.display}
+                    <MapPin size={14} style={{ color: '#0284c7' }} />
+                    <span>{s.display}</span>
                   </li>
                 ))}
               </ul>
@@ -306,31 +392,55 @@ export const TravelOptimization = ({ onNext, itinerary = [] }) => {
           </div>
 
           {/* Start Date */}
-          <div className="flex-col gap-2">
-            <label className="text-caption font-semibold text-primary">Travel Start Date *</label>
-            <div className="flex items-center gap-2 p-3 border border-[var(--color-card-border)] rounded-md bg-white">
-              <Calendar size={16} className="text-tertiary" />
-              <input 
-                type="date" 
-                value={startDate} 
-                onChange={(e) => setStartDate(e.target.value)} 
-                className="w-full border-none outline-none text-primary bg-transparent font-medium"
-              />
-            </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              Travel Start Date *
+            </label>
+            <input 
+              type="date" 
+              value={startDate} 
+              onChange={(e) => setStartDate(e.target.value)} 
+              onClick={(e) => { try { e.target.showPicker(); } catch {} }}
+              style={{
+                width: '100%',
+                padding: '12px 14px',
+                border: '1.5px solid #cbd5e1',
+                borderRadius: '8px',
+                outline: 'none',
+                fontSize: '0.95rem',
+                fontWeight: 600,
+                color: '#0f172a',
+                background: '#ffffff',
+                boxSizing: 'border-box',
+                cursor: 'pointer'
+              }}
+            />
           </div>
 
           {/* End Date */}
-          <div className="flex-col gap-2">
-            <label className="text-caption font-semibold text-primary">Travel End Date (Optional)</label>
-            <div className="flex items-center gap-2 p-3 border border-[var(--color-card-border)] rounded-md bg-white">
-              <Calendar size={16} className="text-tertiary" />
-              <input 
-                type="date" 
-                value={endDate} 
-                onChange={(e) => setEndDate(e.target.value)} 
-                className="w-full border-none outline-none text-primary bg-transparent font-medium"
-              />
-            </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            <label style={{ fontSize: '0.8rem', fontWeight: 700, color: '#0f172a', textTransform: 'uppercase', letterSpacing: '0.04em' }}>
+              Travel End Date (Optional)
+            </label>
+            <input 
+              type="date" 
+              value={endDate} 
+              onChange={(e) => setEndDate(e.target.value)} 
+              onClick={(e) => { try { e.target.showPicker(); } catch {} }}
+              style={{
+                width: '100%',
+                padding: '12px 14px',
+                border: '1.5px solid #cbd5e1',
+                borderRadius: '8px',
+                outline: 'none',
+                fontSize: '0.95rem',
+                fontWeight: 600,
+                color: '#0f172a',
+                background: '#ffffff',
+                boxSizing: 'border-box',
+                cursor: 'pointer'
+              }}
+            />
           </div>
         </div>
       </Card>
@@ -384,8 +494,14 @@ export const TravelOptimization = ({ onNext, itinerary = [] }) => {
                 <div className="flex items-center gap-6">
                   {option.tag === activePreset && <Badge status="live">Recommended for {activePreset}</Badge>}
                   <div className="text-price">${option.price}</div>
-                  <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${selectedInbound === option.id ? 'border-[var(--color-success)] bg-[var(--color-success)]' : 'border-[var(--color-card-border)]'}`}>
-                    {selectedInbound === option.id && <div className="w-2 h-2 bg-white rounded-full"></div>}
+                  <div style={{
+                    width: '24px', height: '24px', borderRadius: '50%', flexShrink: 0,
+                    border: selectedInbound === option.id ? '2px solid #059669' : '2px solid #cbd5e1',
+                    background: selectedInbound === option.id ? '#059669' : 'transparent',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    transition: 'all 0.2s ease'
+                  }}>
+                    {selectedInbound === option.id && <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ffffff' }}></div>}
                   </div>
                 </div>
               </div>
@@ -417,8 +533,14 @@ export const TravelOptimization = ({ onNext, itinerary = [] }) => {
                   <div className="flex items-center gap-6">
                     {option.tag === activePreset && <Badge status="live">Recommended</Badge>}
                     <div className="text-price">${option.price}</div>
-                    <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${selectedInter === option.id ? 'border-[var(--color-success)] bg-[var(--color-success)]' : 'border-[var(--color-card-border)]'}`}>
-                      {selectedInter === option.id && <div className="w-2 h-2 bg-white rounded-full"></div>}
+                    <div style={{
+                      width: '24px', height: '24px', borderRadius: '50%', flexShrink: 0,
+                      border: selectedInter === option.id ? '2px solid #059669' : '2px solid #cbd5e1',
+                      background: selectedInter === option.id ? '#059669' : 'transparent',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      transition: 'all 0.2s ease'
+                    }}>
+                      {selectedInter === option.id && <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ffffff' }}></div>}
                     </div>
                   </div>
                 </div>
@@ -450,8 +572,14 @@ export const TravelOptimization = ({ onNext, itinerary = [] }) => {
                 <div className="flex items-center gap-6">
                   {option.tag === activePreset && <Badge status="live">Recommended</Badge>}
                   <div className="text-price">${option.price}</div>
-                  <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${selectedOutbound === option.id ? 'border-[var(--color-success)] bg-[var(--color-success)]' : 'border-[var(--color-card-border)]'}`}>
-                    {selectedOutbound === option.id && <div className="w-2 h-2 bg-white rounded-full"></div>}
+                  <div style={{
+                    width: '24px', height: '24px', borderRadius: '50%', flexShrink: 0,
+                    border: selectedOutbound === option.id ? '2px solid #059669' : '2px solid #cbd5e1',
+                    background: selectedOutbound === option.id ? '#059669' : 'transparent',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    transition: 'all 0.2s ease'
+                  }}>
+                    {selectedOutbound === option.id && <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ffffff' }}></div>}
                   </div>
                 </div>
               </div>
@@ -482,8 +610,14 @@ export const TravelOptimization = ({ onNext, itinerary = [] }) => {
                 <div className="flex items-center gap-6">
                   {option.tag === activePreset && <Badge status="live">Recommended</Badge>}
                   <div className="text-price">${option.price}</div>
-                  <div className={`w-6 h-6 rounded-full border-2 flex items-center justify-center ${selectedTransfer === option.id ? 'border-[var(--color-success)] bg-[var(--color-success)]' : 'border-[var(--color-card-border)]'}`}>
-                    {selectedTransfer === option.id && <div className="w-2 h-2 bg-white rounded-full"></div>}
+                  <div style={{
+                    width: '24px', height: '24px', borderRadius: '50%', flexShrink: 0,
+                    border: selectedTransfer === option.id ? '2px solid #059669' : '2px solid #cbd5e1',
+                    background: selectedTransfer === option.id ? '#059669' : 'transparent',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    transition: 'all 0.2s ease'
+                  }}>
+                    {selectedTransfer === option.id && <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: '#ffffff' }}></div>}
                   </div>
                 </div>
               </div>
