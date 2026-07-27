@@ -323,48 +323,153 @@ export const EventDiscovery = ({ onNext }) => {
 
       {/* ─── PRIVATE ITINERARY MODE ─── */}
       {activeMode === 'private_trip' && (
-        <Card status="standard" className="mb-6">
-          <h3 className="mb-2">Plan a Private Trip</h3>
-          <p className="text-body mb-6">Add one or more destination cities for your multi-stop or single trip.</p>
-          
-          <div className="flex-col gap-4 max-w-xl">
-            {/* Added Destination Tags */}
-            {selectedDestinations.length > 0 && (
-              <div className="flex-col gap-2 p-3 bg-[var(--color-surface,#f8fafc)] border border-[var(--color-card-border,#cbd5e1)] rounded-lg">
-                <label className="text-caption font-semibold text-primary">
-                  Selected Destinations ({selectedDestinations.length}):
-                </label>
-                <div className="flex flex-wrap gap-2">
+        <Card status="standard" className="mb-6" style={{ overflow: 'visible', border: '1px solid #e2e8f0', borderRadius: '12px', boxShadow: '0 4px 20px rgba(15, 23, 42, 0.05)' }}>
+          <div className="flex items-center gap-3 mb-3">
+            <div style={{ width: '38px', height: '38px', borderRadius: '10px', background: 'linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#0284c7' }}>
+              <Globe size={20} />
+            </div>
+            <div>
+              <h3 style={{ margin: 0, fontSize: '1.35rem', color: '#0f172a' }}>Plan a Private Trip</h3>
+              <p className="text-body" style={{ margin: 0, fontSize: '0.875rem', color: '#64748b' }}>
+                Build a multi-stop or single trip itinerary by adding destination cities or airport codes.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex-col gap-5 mt-5" style={{ maxWidth: '640px' }}>
+            {/* Added Destination Tags List */}
+            {selectedDestinations.length > 0 ? (
+              <div style={{
+                background: 'linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%)',
+                border: '1px solid #cbd5e1',
+                borderRadius: '10px',
+                padding: '14px 16px'
+              }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                  <span style={{ fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.05em', color: '#0284c7', textTransform: 'uppercase' }}>
+                    Your Route ({selectedDestinations.length} Stop{selectedDestinations.length > 1 ? 's' : ''})
+                  </span>
+                  <button 
+                    type="button"
+                    onClick={() => setSelectedDestinations([])}
+                    style={{ background: 'none', border: 'none', color: '#94a3b8', fontSize: '0.75rem', cursor: 'pointer', fontWeight: 500 }}
+                  >
+                    Clear all
+                  </button>
+                </div>
+
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
                   {selectedDestinations.map((dest, idx) => (
                     <div 
                       key={idx} 
-                      className="flex items-center gap-2 px-3 py-1.5 bg-blue-50 border border-blue-200 rounded-md text-sm font-medium text-blue-900 shadow-sm"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        padding: '6px 12px',
+                        background: '#ffffff',
+                        border: '1px solid #93c5fd',
+                        borderRadius: '20px',
+                        boxShadow: '0 2px 6px rgba(2, 132, 199, 0.08)',
+                        fontSize: '0.875rem',
+                        fontWeight: 600,
+                        color: '#0369a1',
+                      }}
                     >
-                      <MapPin size={14} className="text-blue-600 flex-shrink-0" />
+                      <span style={{
+                        width: '20px',
+                        height: '20px',
+                        borderRadius: '50%',
+                        background: '#0284c7',
+                        color: '#ffffff',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        flexShrink: 0
+                      }}>
+                        {idx + 1}
+                      </span>
                       <span>{dest}</span>
                       <button
                         type="button"
                         onClick={() => removeDestination(idx)}
-                        className="ml-1 text-blue-400 hover:text-blue-700 font-bold p-0.5 rounded focus:outline-none"
-                        title="Remove destination"
+                        style={{
+                          background: '#f1f5f9',
+                          border: 'none',
+                          borderRadius: '50%',
+                          width: '18px',
+                          height: '18px',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          cursor: 'pointer',
+                          color: '#64748b',
+                          marginLeft: '2px',
+                          padding: 0,
+                          transition: 'all 0.15s ease'
+                        }}
+                        onMouseEnter={(e) => { e.currentTarget.style.background = '#fee2e2'; e.currentTarget.style.color = '#ef4444'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#64748b'; }}
+                        title="Remove stop"
                       >
-                        <X size={14} />
+                        <X size={12} />
                       </button>
                     </div>
                   ))}
                 </div>
               </div>
+            ) : (
+              <div style={{
+                background: '#f8fafc',
+                border: '1px dashed #cbd5e1',
+                borderRadius: '10px',
+                padding: '16px',
+                textAlign: 'center',
+                color: '#94a3b8',
+                fontSize: '0.875rem'
+              }}>
+                No destinations added yet. Type a city or airport code below to start!
+              </div>
             )}
 
-            <div className="flex-col gap-1">
-              <label className="text-caption font-semibold text-primary">Add Destination *</label>
-              <div className="flex gap-2" style={{ position: 'relative' }}>
-                <div className="flex-1" style={{ position: 'relative' }}>
+            {/* Input & Add Container */}
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+              <label style={{ fontSize: '0.8rem', fontWeight: 600, color: '#0f172a' }}>
+                Add City or Airport Code *
+              </label>
+              
+              <div style={{ display: 'flex', gap: '8px', position: 'relative' }}>
+                <div style={{ position: 'relative', flex: 1 }}>
+                  <span style={{
+                    position: 'absolute',
+                    left: '12px',
+                    top: '50%',
+                    transform: 'translateY(-50%)',
+                    color: '#0284c7',
+                    display: 'flex',
+                    pointerEvents: 'none'
+                  }}>
+                    <MapPin size={18} />
+                  </span>
+
                   <input
                     ref={destInputRef}
                     type="text"
-                    className="p-3 w-full border border-[var(--color-card-border)] rounded-md outline-none text-primary bg-white"
-                    placeholder="e.g. Tokyo, Japan or FRA"
+                    style={{
+                      width: '100%',
+                      padding: '12px 14px 12px 38px',
+                      border: '1.5px solid #cbd5e1',
+                      borderRadius: '8px',
+                      outline: 'none',
+                      fontSize: '0.95rem',
+                      color: '#0f172a',
+                      background: '#ffffff',
+                      boxSizing: 'border-box',
+                      transition: 'border-color 0.15s ease, box-shadow 0.15s ease'
+                    }}
+                    placeholder="e.g. Frankfurt, Tokyo, SIN, or FRA..."
                     value={destInputText}
                     autoComplete="off"
                     spellCheck="false"
@@ -372,19 +477,28 @@ export const EventDiscovery = ({ onNext }) => {
                       setDestInputText(e.target.value);
                       fetchDestinationSuggestions(e.target.value);
                     }}
-                    onFocus={() => {
+                    onFocus={(e) => {
+                      e.target.style.borderColor = '#0284c7';
+                      e.target.style.boxShadow = '0 0 0 3px rgba(2, 132, 199, 0.15)';
                       if (destSuggestions.length > 0) setDestDropdownOpen(true);
+                    }}
+                    onBlur={(e) => {
+                      e.target.style.borderColor = '#cbd5e1';
+                      e.target.style.boxShadow = 'none';
                     }}
                     onKeyDown={handleDestKeyDown}
                   />
+
                   {destLoading && (
                     <span style={{
-                      position: 'absolute', right: '0.75rem', top: '50%', transform: 'translateY(-50%)',
-                      pointerEvents: 'none', display: 'flex', color: 'var(--color-text-secondary)'
+                      position: 'absolute', right: '12px', top: '50%', transform: 'translateY(-50%)',
+                      pointerEvents: 'none', display: 'flex', color: '#0284c7'
                     }}>
-                      <Loader2 size={15} className="animate-spin" />
+                      <Loader2 size={16} className="animate-spin" />
                     </span>
                   )}
+
+                  {/* Dropdown Suggestions */}
                   {destDropdownOpen && destSuggestions.length > 0 && (
                     <ul
                       ref={destDropdownRef}
@@ -397,10 +511,10 @@ export const EventDiscovery = ({ onNext }) => {
                         background: '#ffffff',
                         border: '1px solid #cbd5e1',
                         borderRadius: '8px',
-                        boxShadow: '0 12px 32px rgba(0,0,0,0.18)',
+                        boxShadow: '0 12px 36px rgba(15, 23, 42, 0.16)',
                         listStyle: 'none',
                         margin: 0,
-                        padding: '4px 0',
+                        padding: '6px 0',
                         maxHeight: '240px',
                         overflowY: 'auto',
                       }}
@@ -418,40 +532,105 @@ export const EventDiscovery = ({ onNext }) => {
                             cursor: 'pointer',
                             display: 'flex',
                             alignItems: 'center',
-                            gap: '8px',
-                            backgroundColor: destHighlight === idx ? '#eff6ff' : '#ffffff',
-                            color: '#111827',
+                            gap: '10px',
+                            backgroundColor: destHighlight === idx ? '#f0f9ff' : '#ffffff',
+                            color: '#0f172a',
                             fontSize: '14px',
                             lineHeight: '1.4',
                           }}
                         >
-                          <MapPin size={13} style={{ flexShrink: 0, color: '#3b82f6' }} />
-                          <span>{s.display}</span>
+                          <MapPin size={15} style={{ flexShrink: 0, color: '#0284c7' }} />
+                          <span style={{ flex: 1 }}>{s.display}</span>
+                          {s.iata && (
+                            <span style={{
+                              fontSize: '11px',
+                              fontWeight: 700,
+                              background: '#e0f2fe',
+                              color: '#0369a1',
+                              padding: '2px 6px',
+                              borderRadius: '4px'
+                            }}>
+                              {s.iata}
+                            </span>
+                          )}
                         </li>
                       ))}
                     </ul>
                   )}
                 </div>
 
-                <Button 
-                  variant="secondary" 
-                  type="button" 
-                  onClick={() => addDestination(destInputText)}
+                <button
+                  type="button"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    if (destInputText.trim()) addDestination(destInputText);
+                  }}
+                  onClick={() => {
+                    if (destInputText.trim()) addDestination(destInputText);
+                  }}
                   disabled={!destInputText.trim()}
+                  style={{
+                    padding: '0 20px',
+                    borderRadius: '8px',
+                    border: 'none',
+                    background: destInputText.trim() ? '#0284c7' : '#e2e8f0',
+                    color: destInputText.trim() ? '#ffffff' : '#94a3b8',
+                    fontWeight: 600,
+                    fontSize: '0.9rem',
+                    cursor: destInputText.trim() ? 'pointer' : 'not-allowed',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    transition: 'all 0.15s ease',
+                    boxShadow: destInputText.trim() ? '0 2px 8px rgba(2, 132, 199, 0.25)' : 'none'
+                  }}
                 >
-                  <Plus size={16} className="mr-1 inline" /> Add
-                </Button>
+                  <Plus size={16} /> Add Stop
+                </button>
               </div>
             </div>
 
-            <Button 
-              variant="primary" 
-              className="mt-4 w-full"
+            {/* Action CTA Button */}
+            <button
+              type="button"
               disabled={selectedDestinations.length === 0}
               onClick={handleCreatePrivateTrip}
+              style={{
+                marginTop: '12px',
+                width: '100%',
+                padding: '14px 24px',
+                borderRadius: '8px',
+                border: 'none',
+                background: selectedDestinations.length > 0 
+                  ? 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)' 
+                  : '#cbd5e1',
+                color: '#ffffff',
+                fontWeight: 700,
+                fontSize: '1rem',
+                cursor: selectedDestinations.length > 0 ? 'pointer' : 'not-allowed',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                boxShadow: selectedDestinations.length > 0 
+                  ? '0 4px 14px rgba(2, 132, 199, 0.35)' 
+                  : 'none',
+                transition: 'all 0.2s ease'
+              }}
             >
-              Start Planning Trip ({selectedDestinations.length} Stop{selectedDestinations.length !== 1 ? 's' : ''}) <ArrowRight size={16} className="ml-2 inline" />
-            </Button>
+              <span>Start Planning Trip</span>
+              {selectedDestinations.length > 0 && (
+                <span style={{
+                  background: 'rgba(255, 255, 255, 0.2)',
+                  padding: '2px 8px',
+                  borderRadius: '12px',
+                  fontSize: '0.8rem'
+                }}>
+                  {selectedDestinations.length} Stop{selectedDestinations.length > 1 ? 's' : ''}
+                </span>
+              )}
+              <ArrowRight size={18} />
+            </button>
           </div>
         </Card>
       )}
