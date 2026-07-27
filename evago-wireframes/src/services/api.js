@@ -70,4 +70,30 @@ export const evagoApi = {
     }
     return response.json();
   },
+
+  /**
+   * Save confirmed TravelPass to backend
+   */
+  async saveTravelPass(itinerary, booking) {
+    const response = await fetch(`${API_BASE_URL}/itinerary/pass`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ itinerary, booking }),
+    });
+    if (!response.ok) {
+      throw new Error('Failed to save travel pass');
+    }
+    return response.json();
+  },
+
+  /**
+   * Get latest saved TravelPass
+   */
+  async getLatestPass() {
+    const response = await fetch(`${API_BASE_URL}/itinerary/pass`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch travel pass');
+    }
+    return response.json();
+  },
 };

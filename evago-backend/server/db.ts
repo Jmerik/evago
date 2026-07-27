@@ -29,6 +29,7 @@ interface DataStore {
   organizerCalendars: OrganizerCalendar[];
   itineraryItems: ItineraryItem[];
   publicCustomEvents: any[];
+  savedPasses: any[];
 }
 
 const DATA_FILE = path.resolve(__dirname, '../data/store.json');
@@ -43,7 +44,7 @@ function ensureDataDir() {
 function readStore(): DataStore {
   ensureDataDir();
   if (!fs.existsSync(DATA_FILE)) {
-    const empty: DataStore = { organizerCalendars: [], itineraryItems: [], publicCustomEvents: [] };
+    const empty: DataStore = { organizerCalendars: [], itineraryItems: [], publicCustomEvents: [], savedPasses: [] };
     fs.writeFileSync(DATA_FILE, JSON.stringify(empty, null, 2));
     return empty;
   }
@@ -106,5 +107,19 @@ export const db = {
     if (!store.publicCustomEvents) store.publicCustomEvents = [];
     store.publicCustomEvents.push(event);
     writeStore(store);
+  },
+
+  savePass(passData: any) {
+    const store = readStore();
+    if (!store.savedPasses) store.savedPasses = [];
+    store.savedPasses.push(passData);
+    writeStore(store);
+  },
+
+  getLatestPass(userId: string = 'default-user'): any | null {
+    const store = readStore();
+    if (!store.savedPasses || store.savedPasses.length === 0) return null;
+    const userPasses = store.savedPasses.filter(p => p.userId === userId);
+    return userPasses.length > 0 ? userPasses[userPasses.length - 1] : null;
   }
 };
