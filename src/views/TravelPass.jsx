@@ -56,26 +56,40 @@ export const TravelPass = ({ onNext, itinerary = [], booking }) => {
               </div>
             ))}
 
-            {/* Render flight booking if confirmed */}
-            {booking?.flight && (
-              <div className="flex justify-between items-center text-body border-b border-[var(--color-card-border)] py-2">
-                <div>
-                  <div className="text-secondary font-medium">{booking.flight.provider}</div>
-                  <div className="text-caption" style={{ fontSize: '11px' }}>{booking.departure} → {primaryCity}</div>
+            {/* Render booked travel legs */}
+            {booking?.bookedLegs && booking.bookedLegs.length > 0 ? (
+              booking.bookedLegs.map((leg, idx) => (
+                <div key={idx} className="flex justify-between items-center text-body border-b border-[var(--color-card-border)] py-2">
+                  <div>
+                    <div className="text-secondary font-medium">{leg.provider}</div>
+                    <div className="text-caption" style={{ fontSize: '11px' }}>{leg.type}: {leg.from} → {leg.to}</div>
+                  </div>
+                  <Badge status={leg.type.includes('Flight') ? 'live' : 'confirmed'}>
+                    {leg.type.includes('Flight') ? 'Boarding Pass' : 'Ticket Ready'}
+                  </Badge>
                 </div>
-                <Badge status="live">Boarding Pass</Badge>
-              </div>
-            )}
-
-            {/* Render transfer if booked */}
-            {booking?.transfer && (
-              <div className="flex justify-between items-center text-body pt-2">
-                <div>
-                  <div className="text-secondary font-medium">{booking.transfer.provider}</div>
-                  <div className="text-caption" style={{ fontSize: '11px' }}>{booking.transfer.time} Transfer</div>
-                </div>
-                <Badge status="confirmed">Voucher Ready</Badge>
-              </div>
+              ))
+            ) : (
+              <>
+                {booking?.flight && (
+                  <div className="flex justify-between items-center text-body border-b border-[var(--color-card-border)] py-2">
+                    <div>
+                      <div className="text-secondary font-medium">{booking.flight.provider}</div>
+                      <div className="text-caption" style={{ fontSize: '11px' }}>{booking.departure} → {primaryCity}</div>
+                    </div>
+                    <Badge status="live">Boarding Pass</Badge>
+                  </div>
+                )}
+                {booking?.transfer && (
+                  <div className="flex justify-between items-center text-body pt-2">
+                    <div>
+                      <div className="text-secondary font-medium">{booking.transfer.provider}</div>
+                      <div className="text-caption" style={{ fontSize: '11px' }}>{booking.transfer.time} Transfer</div>
+                    </div>
+                    <Badge status="confirmed">Voucher Ready</Badge>
+                  </div>
+                )}
+              </>
             )}
           </div>
 
