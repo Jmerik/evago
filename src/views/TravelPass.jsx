@@ -2,7 +2,23 @@ import React from 'react';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { Badge } from '../components/Badge';
-import { QrCode, Wallet, Download, Calendar, MapPin } from 'lucide-react';
+import { QrCode, Wallet, Download, Calendar, MapPin, Clock } from 'lucide-react';
+
+const fmtStopDate = (iso) => {
+  if (!iso) return null;
+  const d = iso.endsWith('Z') || iso.includes('+') ? new Date(iso) : new Date(iso + 'Z');
+  if (isNaN(d)) return null;
+  return d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' });
+};
+
+const fmtStopTime = (iso) => {
+  if (!iso || !iso.includes('T')) return null;
+  const timePart = iso.split('T')[1]?.replace('Z', '') || '';
+  if (timePart === '00:00:00' || timePart === '00:00') return null;
+  const d = iso.endsWith('Z') || iso.includes('+') ? new Date(iso) : new Date(iso + 'Z');
+  if (isNaN(d)) return null;
+  return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+};
 
 export const TravelPass = ({ onNext, itinerary = [], booking }) => {
   const primaryCity = itinerary.length > 0 && itinerary[0]?.venue?.city 
@@ -44,17 +60,33 @@ export const TravelPass = ({ onNext, itinerary = [], booking }) => {
 
           <div className="flex-col gap-2 text-left mb-6">
             {/* Render actual events from itinerary */}
-            {itinerary.map(item => (
-              <div key={item.id} className="flex justify-between items-center text-body border-b border-[var(--color-card-border)] pb-2">
-                <div>
-                  <div className="text-secondary font-medium">{item.name}</div>
-                  {item.venue?.fullAddress && (
-                    <div className="text-caption" style={{ fontSize: '11px' }}>{item.venue.fullAddress}</div>
-                  )}
+            {itinerary.map(item => {
+              const stopDate = fmtStopDate(item.startAt);
+              const stopTime = fmtStopTime(item.startAt);
+              return (
+                <div key={item.id} className="flex justify-between items-start text-body border-b border-[var(--color-card-border)] pb-2">
+                  <div>
+                    <div className="text-secondary font-medium">{item.name}</div>
+                    {item.venue?.fullAddress && (
+                      <div className="text-caption" style={{ fontSize: '11px' }}>{item.venue.fullAddress}</div>
+                    )}
+                    {stopDate && (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginTop: '3px', flexWrap: 'wrap' }}>
+                        <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '11px', color: '#0284c7', fontWeight: 600 }}>
+                          <Calendar size={11} /> {stopDate}
+                        </span>
+                        {stopTime && (
+                          <span style={{ display: 'flex', alignItems: 'center', gap: '3px', fontSize: '11px', color: '#0369a1', fontWeight: 600 }}>
+                            <Clock size={11} /> {stopTime}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <Badge status="confirmed">Access Granted</Badge>
                 </div>
-                <Badge status="confirmed">Access Granted</Badge>
-              </div>
-            ))}
+              );
+            })}
 
             {/* Render booked travel legs */}
             {booking?.bookedLegs && booking.bookedLegs.length > 0 ? (

@@ -55,8 +55,8 @@ export const EventDiscovery = ({ onNext }) => {
   const addDestination = (destName) => {
     const trimmed = (destName || '').trim();
     if (!trimmed) return;
-    if (!selectedDestinations.includes(trimmed)) {
-      setSelectedDestinations(prev => [...prev, trimmed]);
+    if (!selectedDestinations.find(d => d.name === trimmed)) {
+      setSelectedDestinations(prev => [...prev, { name: trimmed, date: '', time: '' }]);
     }
     setDestInputText('');
     setDestDropdownOpen(false);
@@ -65,6 +65,12 @@ export const EventDiscovery = ({ onNext }) => {
 
   const removeDestination = (indexToRemove) => {
     setSelectedDestinations(prev => prev.filter((_, idx) => idx !== indexToRemove));
+  };
+
+  const updateStopField = (index, field, value) => {
+    setSelectedDestinations(prev => prev.map((stop, idx) =>
+      idx === index ? { ...stop, [field]: value } : stop
+    ));
   };
 
   const updateDestRect = useCallback(() => {
@@ -239,16 +245,24 @@ export const EventDiscovery = ({ onNext }) => {
   const handleCreatePrivateTrip = () => {
     if (selectedDestinations.length === 0) return;
     
-    const tripEvents = selectedDestinations.map((dest, idx) => ({
-      id: `trip-${Date.now()}-${idx}`,
-      name: `Trip to ${dest}`,
-      type: 'main_conference',
-      source: 'private_trip',
-      venue: {
-        city: dest.split(',')[0].trim(),
-        fullAddress: dest
-      }
-    }));
+    const tripEvents = selectedDestinations.map((stop, idx) => {
+      const startAt = stop.date
+        ? `${stop.date}T${stop.time || '00:00'}:00`
+        : null;
+      return {
+        id: `trip-${Date.now()}-${idx}`,
+        name: `Trip to ${stop.name}`,
+        type: 'main_conference',
+        source: 'private_trip',
+        startAt,
+        scheduledDate: stop.date,
+        scheduledTime: stop.time,
+        venue: {
+          city: stop.name.split(',')[0].trim(),
+          fullAddress: stop.name
+        }
+      };
+    });
     
     setItinerary(tripEvents);
     onNext(tripEvents);
@@ -288,13 +302,21 @@ export const EventDiscovery = ({ onNext }) => {
 
   const formatDate = (iso) => {
     if (!iso) return '';
-    return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+    // Ensure we parse both UTC (Z) and local (no Z) ISO strings correctly
+    const d = iso.endsWith('Z') || iso.includes('+') ? new Date(iso) : new Date(iso + 'Z');
+    if (isNaN(d)) return '';
+    return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
   };
 
   const formatTime = (iso) => {
     if (!iso) return '';
-    if (iso.includes('00:00:00Z') && !iso.includes('T00:00')) return ''; // Skip time if midnight exact
-    return new Date(iso).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+    // Skip if no time component or explicitly midnight
+    if (!iso.includes('T')) return '';
+    const timePart = iso.split('T')[1]?.replace('Z', '') || '';
+    if (timePart === '00:00:00' || timePart === '00:00') return '';
+    const d = iso.endsWith('Z') || iso.includes('+') ? new Date(iso) : new Date(iso + 'Z');
+    if (isNaN(d)) return '';
+    return d.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
   };
 
   const mainConferences = regionEvents.filter(e => e.type === 'main_conference');
@@ -352,7 +374,7 @@ export const EventDiscovery = ({ onNext }) => {
                 borderRadius: '10px',
                 padding: '14px 16px'
               }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '10px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
                   <span style={{ fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.05em', color: '#0284c7', textTransform: 'uppercase' }}>
                     Your Route ({selectedDestinations.length} Stop{selectedDestinations.length > 1 ? 's' : ''})
                   </span>
@@ -365,63 +387,108 @@ export const EventDiscovery = ({ onNext }) => {
                   </button>
                 </div>
 
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
-                  {selectedDestinations.map((dest, idx) => (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  {selectedDestinations.map((stop, idx) => (
                     <div 
                       key={idx} 
                       style={{
                         display: 'flex',
                         alignItems: 'center',
-                        gap: '8px',
-                        padding: '6px 12px',
+                        gap: '10px',
+                        padding: '10px 14px',
                         background: '#ffffff',
-                        border: '1px solid #93c5fd',
-                        borderRadius: '20px',
-                        boxShadow: '0 2px 6px rgba(2, 132, 199, 0.08)',
-                        fontSize: '0.875rem',
-                        fontWeight: 600,
-                        color: '#0369a1',
+                        border: '1.5px solid #93c5fd',
+                        borderRadius: '10px',
+                        boxShadow: '0 2px 8px rgba(2, 132, 199, 0.07)',
+                        flexWrap: 'wrap',
                       }}
                     >
+                      {/* Stop number */}
                       <span style={{
-                        width: '20px',
-                        height: '20px',
-                        borderRadius: '50%',
-                        background: '#0284c7',
-                        color: '#ffffff',
-                        fontSize: '11px',
-                        fontWeight: 700,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
+                        width: '24px', height: '24px', borderRadius: '50%',
+                        background: '#0284c7', color: '#ffffff',
+                        fontSize: '11px', fontWeight: 700,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
                         flexShrink: 0
                       }}>
                         {idx + 1}
                       </span>
-                      <span>{dest}</span>
+
+                      {/* Destination name */}
+                      <span style={{ fontWeight: 600, color: '#0369a1', fontSize: '0.9rem', minWidth: '120px', flex: '1' }}>
+                        {stop.name}
+                      </span>
+
+                      {/* Arrival Date */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                        <label style={{ fontSize: '0.68rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Arrive Date</label>
+                        <input
+                          type="date"
+                          value={stop.date}
+                          onChange={e => updateStopField(idx, 'date', e.target.value)}
+                          style={{
+                            padding: '5px 8px',
+                            border: stop.date ? '1.5px solid #0284c7' : '1.5px solid #cbd5e1',
+                            borderRadius: '6px',
+                            fontSize: '0.82rem',
+                            color: stop.date ? '#0f172a' : '#94a3b8',
+                            outline: 'none',
+                            background: '#f8fafc',
+                            cursor: 'pointer',
+                          }}
+                        />
+                      </div>
+
+                      {/* Arrival Time */}
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                        <label style={{ fontSize: '0.68rem', fontWeight: 700, color: '#64748b', textTransform: 'uppercase', letterSpacing: '0.04em' }}>Time</label>
+                        <input
+                          type="time"
+                          value={stop.time}
+                          disabled={!stop.date}
+                          onChange={e => updateStopField(idx, 'time', e.target.value)}
+                          style={{
+                            padding: '5px 8px',
+                            border: stop.time ? '1.5px solid #0284c7' : '1.5px solid #cbd5e1',
+                            borderRadius: '6px',
+                            fontSize: '0.82rem',
+                            color: stop.time ? '#0f172a' : '#94a3b8',
+                            outline: 'none',
+                            background: stop.date ? '#f8fafc' : '#f1f5f9',
+                            cursor: stop.date ? 'pointer' : 'not-allowed',
+                            opacity: stop.date ? 1 : 0.5,
+                          }}
+                        />
+                      </div>
+
+                      {/* Scheduled badge */}
+                      {stop.date && (
+                        <span style={{
+                          fontSize: '0.72rem', fontWeight: 600,
+                          background: '#dcfce7', color: '#15803d',
+                          padding: '3px 8px', borderRadius: '6px',
+                          whiteSpace: 'nowrap'
+                        }}>
+                          ✓ Scheduled
+                        </span>
+                      )}
+
+                      {/* Remove button */}
                       <button
                         type="button"
                         onClick={() => removeDestination(idx)}
                         style={{
-                          background: '#f1f5f9',
-                          border: 'none',
-                          borderRadius: '50%',
-                          width: '18px',
-                          height: '18px',
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          cursor: 'pointer',
-                          color: '#64748b',
-                          marginLeft: '2px',
-                          padding: 0,
-                          transition: 'all 0.15s ease'
+                          background: '#f1f5f9', border: 'none', borderRadius: '50%',
+                          width: '22px', height: '22px',
+                          display: 'flex', alignItems: 'center', justifyContent: 'center',
+                          cursor: 'pointer', color: '#64748b',
+                          padding: 0, transition: 'all 0.15s ease', flexShrink: 0
                         }}
                         onMouseEnter={(e) => { e.currentTarget.style.background = '#fee2e2'; e.currentTarget.style.color = '#ef4444'; }}
                         onMouseLeave={(e) => { e.currentTarget.style.background = '#f1f5f9'; e.currentTarget.style.color = '#64748b'; }}
                         title="Remove stop"
                       >
-                        <X size={12} />
+                        <X size={13} />
                       </button>
                     </div>
                   ))}
@@ -634,6 +701,7 @@ export const EventDiscovery = ({ onNext }) => {
                   fontSize: '0.8rem'
                 }}>
                   {selectedDestinations.length} Stop{selectedDestinations.length > 1 ? 's' : ''}
+                  {selectedDestinations.every(s => s.date) && ' · All Scheduled'}
                 </span>
               )}
               <ArrowRight size={18} />

@@ -4,6 +4,7 @@
  * Last updated: 2026-07
  * To add a new airport: { IATA: { city, country, name } }
  */
+
 const IATA_MAP = {
   // ── SOUTHEAST ASIA ──────────────────────────────────────────
   SIN: { city: 'Singapore', country: 'Singapore', name: 'Changi Airport' },
